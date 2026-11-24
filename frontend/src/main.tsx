@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { AdvisorPage } from "./pages/AdvisorPage";
+import { CirclePage } from "./pages/CirclePage";
 import { ConsumePage } from "./pages/ConsumePage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { PeoplePage } from "./pages/PeoplePage";
@@ -31,6 +32,7 @@ function App() {
           <Routes>
             <Route path="/" element={<PeoplePage />} />
             <Route path="/people/:slug" element={<PersonPage />} />
+            <Route path="/circle" element={<CirclePage />} />
             <Route path="/consume" element={<ConsumePage />} />
             <Route path="/advisor" element={<AdvisorPage />} />
             <Route path="/resources" element={<LibraryPage />} />

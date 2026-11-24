@@ -23,6 +23,7 @@ from .advisor import Advisor
 from .analyzers import Analyzer, Item
 from .config import BUILD_COMMIT, BUILD_DATE, VERSION, Settings, load_settings
 from .gemini import GeminiService, friendly_error
+from .graph import build_graph, link_people
 from .ingest import IngestError, IngestPipeline, IngestRequest, detect_kind, link_kind
 from .jobs import JobManager
 from .library import Library
@@ -288,6 +289,17 @@ def create_app(
         job = jobs.create("ingest", target.slug, target.name, f"Consume {len(items)} source(s) for {target.name}")
         job.task = asyncio.create_task(pipeline.run(job, IngestRequest(slug=target.slug, items=items, cleanup=cleanup)))
         return job.snapshot()
+
+    # ------------------------------------------------------------------ graph
+    @app.get("/api/graph")
+    async def get_graph():
+        return await run_in_threadpool(build_graph, store)
+
+    @app.post("/api/graph/link")
+    async def link_graph():
+        """Add the links found in everyone's notes and profiles to their References sections."""
+        result = await run_in_threadpool(link_people, store)
+        return {**result, "graph": await run_in_threadpool(build_graph, store)}
 
     # ---------------------------------------------------------------- library
     @app.get("/api/library")

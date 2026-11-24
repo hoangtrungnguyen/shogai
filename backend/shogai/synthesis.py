@@ -9,7 +9,7 @@ from .config import Settings
 from .gemini import GeminiService
 from .prompts import SYNTHESIS_SYSTEM, SYNTHESIS_TASK
 from .schemas import ProfileUpdate
-from .store import Person, SourceRecord, Store, split_frontmatter, strip_source_log
+from .store import Person, SourceRecord, Store, split_frontmatter, split_references, strip_source_log
 
 PLACEHOLDER_MARKER = "_Nothing recorded yet."
 
@@ -33,7 +33,9 @@ def _source_block(record: SourceRecord, markdown: str) -> str:
 async def synthesize_profile(
     gem: GeminiService, settings: Settings, person: Person, sources: list[SourceDoc]
 ) -> ProfileUpdate:
-    current = "" if _is_placeholder(person.body) else person.body
+    # The References section (links to other people) is the app's and the user's: Gemini never sees it.
+    body, _ = split_references(person.body)
+    current = "" if _is_placeholder(body) else body
     prompt = SYNTHESIS_TASK.format(
         name=person.name,
         relationship=person.relationship or "(not set)",
@@ -75,6 +77,7 @@ def apply_update(
         raise ValueError("The synthesized profile was empty; keeping the previous version.")
     if not body.lstrip().startswith("#"):
         body = f"# {person.name}\n\n{body}"
+    body, _ = split_references(body)  # save_profile keeps the stored References section
 
     meta: dict = {"summary": (update.summary or "").strip() or person.summary}
     if not person.relationship and (update.relationship or "").strip():

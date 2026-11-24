@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useJobs, usePeople, type TrackedJob } from "../state";
 import type { Health } from "../types";
-import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 
 const JOB_LABEL: Record<TrackedJob["kind"], string> = { ingest: "Consume", rebuild: "Rebuild", library: "Library scan" };
@@ -50,11 +48,6 @@ function JobRow({ job, onDismiss }: { job: TrackedJob; onDismiss: () => void }) 
 export function Sidebar() {
   const { people, health } = usePeople();
   const { jobs, dismiss } = useJobs();
-  const [filter, setFilter] = useState("");
-  const needle = filter.trim().toLowerCase();
-  const shown = needle
-    ? people.filter((p) => [p.name, p.relationship, ...p.aliases, ...p.tags].join(" ").toLowerCase().includes(needle))
-    : people;
 
   return (
     <aside className="sidebar">
@@ -83,31 +76,12 @@ export function Sidebar() {
         </NavLink>
       </nav>
 
-      <div className="side-people">
-        <div className="side-head">
-          <span>Your circle</span>
-          <span className="count">{people.length}</span>
-        </div>
-        {people.length > 6 && (
-          <input
-            className="side-filter"
-            placeholder="Filter people…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-        )}
-        <ul>
-          {shown.map((p) => (
-            <li key={p.slug}>
-              <NavLink to={`/people/${encodeURIComponent(p.slug)}`}>
-                <Avatar person={p} size={24} />
-                <span className="truncate">{p.name}</span>
-              </NavLink>
-            </li>
-          ))}
-          {!people.length && <li className="side-empty">No one yet.</li>}
-        </ul>
-      </div>
+      <NavLink to="/circle" className="circle-btn" title="See how the people in your circle are linked">
+        <Icon name="graph" /> Your circle
+        <span className="count">{people.length}</span>
+      </NavLink>
+
+      <div className="side-spacer" />
 
       {jobs.length > 0 && (
         <div className="jobs-tray">
