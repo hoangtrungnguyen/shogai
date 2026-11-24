@@ -4,6 +4,7 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { AdvisorPage } from "./pages/AdvisorPage";
 import { ConsumePage } from "./pages/ConsumePage";
+import { LibraryPage } from "./pages/LibraryPage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { PersonPage } from "./pages/PersonPage";
 import { AppProvider } from "./state";
@@ -32,6 +33,7 @@ function App() {
             <Route path="/people/:slug" element={<PersonPage />} />
             <Route path="/consume" element={<ConsumePage />} />
             <Route path="/advisor" element={<AdvisorPage />} />
+            <Route path="/resources" element={<LibraryPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

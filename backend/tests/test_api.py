@@ -161,7 +161,8 @@ def test_ingest_end_to_end_with_partial_failure(client):
     detail = client.get("/api/people/ana/sources/s2").json()
     assert "![cafe.png](../media/" in detail["markdown"]
     media = client.get("/api/people/ana/media").json()
-    assert len(media) == 3  # cafe.png, broken.png, chat.txt kept as originals
+    assert len(media) == 4  # thoughts.md, cafe.png, broken.png, chat.txt kept as originals
+    assert sources[0]["original"] == "thoughts.md"
     img = client.get(f"/api/people/ana/media/{person['avatar'].split('/', 1)[1]}")
     assert img.status_code == 200 and img.content == PNG_1PX
 

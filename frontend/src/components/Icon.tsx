@@ -27,6 +27,7 @@ const PATHS: Record<string, string> = {
   history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  book: '<path d="M2.5 5.5c3-1.6 6.2-1.6 9.5.8 3.3-2.4 6.5-2.4 9.5-.8v13.6c-3-1.6-6.2-1.6-9.5.8-3.3-2.4-6.5-2.4-9.5-.8z"/><path d="M12 6.3v14"/>',
   file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
 };
 

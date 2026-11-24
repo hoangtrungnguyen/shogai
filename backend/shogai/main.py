@@ -22,6 +22,7 @@ from .config import Settings, load_settings
 from .gemini import GeminiService, friendly_error
 from .ingest import IngestError, IngestPipeline, IngestRequest, detect_kind, link_kind
 from .jobs import JobManager
+from .library import Library
 from .store import NotFound, Store, StoreError, now_iso, safe_filename
 from .synthesis import Synthesizer
 
@@ -67,6 +68,7 @@ def create_app(
     jobs = JobManager()
     pipeline = IngestPipeline(store, gem, settings, analyzers=analyzers, synthesizer=synthesizer)
     advisor = Advisor(store, gem, settings)
+    library = Library(store, gem, settings)
     tmp_root = settings.data_dir / ".tmp"
 
     app = FastAPI(title="Shōgai API", version="0.1.0")
@@ -218,8 +220,13 @@ def create_app(
             return f"i{counter}"
 
         if thoughts.strip():
-            items.append(Item(id=next_id(), kind="text", label="Personal thoughts", text=thoughts.strip(),
-                              note=thoughts_note.strip()))
+            item = Item(id=next_id(), kind="text", label="Personal thoughts", text=thoughts.strip(),
+                        note=thoughts_note.strip())
+            if settings.keep_media:  # keep the raw note too, so later scans (e.g. the library) can read it
+                dest = store.new_media_path(target.slug, "thoughts.md")
+                dest.write_text(thoughts.strip() + "\n", encoding="utf-8")
+                item.media, item.original = f"media/{dest.name}", "thoughts.md"
+            items.append(item)
         for upload, fk, note in kinds:
             name = upload.filename or "upload"
             if settings.keep_media:
@@ -242,6 +249,21 @@ def create_app(
 
         job = jobs.create("ingest", target.slug, target.name, f"Consume {len(items)} source(s) for {target.name}")
         job.task = asyncio.create_task(pipeline.run(job, IngestRequest(slug=target.slug, items=items, cleanup=cleanup)))
+        return job.snapshot()
+
+    # ---------------------------------------------------------------- library
+    @app.get("/api/library")
+    async def get_library():
+        return await run_in_threadpool(library.snapshot)
+
+    @app.post("/api/library/scan", status_code=202)
+    async def scan_library(force: bool = False):
+        require_gemini()
+        running = next((j for j in jobs.list() if j.kind == "library" and not j.finished), None)
+        if running:
+            return running.snapshot()
+        job = jobs.create("library", "", "Library", "Scan notes for academic resources")
+        job.task = asyncio.create_task(library.scan(job, force=force))
         return job.snapshot()
 
     # ------------------------------------------------------------------- jobs

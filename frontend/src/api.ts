@@ -1,6 +1,7 @@
 import type {
   ChatEvent,
   Health,
+  LibraryData,
   JobSnapshot,
   MediaFile,
   Person,
@@ -55,6 +56,9 @@ export const api = {
   media: (slug: string) => request<MediaFile[]>(`${p(slug)}/media`),
   jobs: () => request<JobSnapshot[]>("/api/jobs"),
   job: (id: string) => request<JobSnapshot>(`/api/jobs/${id}`),
+  library: () => request<LibraryData>("/api/library"),
+  scanLibrary: (force = false) =>
+    request<JobSnapshot>(`/api/library/scan${force ? "?force=true" : ""}`, { method: "POST" }),
 };
 
 export interface IngestFile {

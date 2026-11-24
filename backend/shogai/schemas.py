@@ -127,3 +127,28 @@ class ProfileUpdate(BaseModel):
         "No YAML frontmatter and no 'Source Log' section."
     )
     changes: list[str] = Field(default_factory=list, description="Short bullets describing what changed in this update.")
+
+
+ResourceType = Literal["paper", "book", "chapter", "textbook", "thesis", "report", "course", "lecture", "other"]
+
+
+class FoundResource(BaseModel):
+    note: int = Field(description="Number of the NOTE header the mention appears in.")
+    quote: str = Field(
+        description="The exact text copied character-for-character from that note that mentions the resource "
+        "(one line, at most ~200 characters)."
+    )
+    title: str = Field(description="Title as best identified; keep the original language.")
+    type: ResourceType
+    authors: list[str] = Field(default_factory=list)
+    year: str | None = None
+    field: str | None = Field(default=None, description="Discipline, e.g. 'psychology', 'economics', 'Japanese language'.")
+    identified: bool = Field(
+        description="True if the full title, authors or year were completed from general knowledge rather than "
+        "written in the note."
+    )
+    context: str = Field(description="One short sentence: how the note mentions it (recommended, gifted, studying…).")
+
+
+class LibraryExtraction(BaseModel):
+    resources: list[FoundResource] = Field(default_factory=list)

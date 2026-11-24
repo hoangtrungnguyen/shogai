@@ -4,19 +4,25 @@ import { useJobs, usePeople, type TrackedJob } from "../state";
 import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 
+const JOB_LABEL: Record<TrackedJob["kind"], string> = { ingest: "Consume", rebuild: "Rebuild", library: "Library scan" };
+
 function JobRow({ job, onDismiss }: { job: TrackedJob; onDismiss: () => void }) {
   const navigate = useNavigate();
+  const target = job.kind === "library" ? "/resources" : `/consume?job=${job.id}`;
   const total = job.items.length || 1;
   const finished = job.items.filter((i) => i.status === "done" || i.status === "error").length;
   const pct = job.status === "running" ? Math.max(6, Math.round((finished / total) * 85)) : 100;
   return (
     <div className={`job-row ${job.status}`}>
-      <button type="button" className="job-main" onClick={() => navigate(`/consume?job=${job.id}`)}>
+      <button type="button" className="job-main" onClick={() => navigate(target)}>
         <span className="job-title">
           {job.status === "running" && <span className="spinner" />}
           {job.status === "done" && <Icon name="check" size={14} />}
           {job.status === "error" && <Icon name="alert" size={14} />}
-          <span className="truncate">{job.kind === "rebuild" ? "Rebuild" : "Consume"} · {job.personName}</span>
+          <span className="truncate">
+            {JOB_LABEL[job.kind]}
+            {job.kind !== "library" && ` · ${job.personName}`}
+          </span>
         </span>
         <span className="job-stage truncate">
           {job.status === "error" ? job.error : job.stage ?? "Starting…"}
@@ -64,6 +70,9 @@ export function Sidebar() {
         </NavLink>
         <NavLink to="/advisor">
           <Icon name="chat" /> Advisor
+        </NavLink>
+        <NavLink to="/resources">
+          <Icon name="academic" /> Resources
         </NavLink>
       </nav>
 

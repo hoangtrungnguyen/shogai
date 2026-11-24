@@ -53,7 +53,7 @@ export interface Health {
 
 export interface JobSnapshot {
   id: string;
-  kind: "ingest" | "rebuild";
+  kind: "ingest" | "rebuild" | "library";
   person: string;
   person_name: string;
   label: string;
@@ -106,4 +106,60 @@ export interface Conversation {
   focus: string[];
   messages: ChatMessage[];
   updated: string;
+}
+
+export type ResourceType =
+  | "paper"
+  | "book"
+  | "chapter"
+  | "textbook"
+  | "thesis"
+  | "report"
+  | "course"
+  | "lecture"
+  | "other";
+
+export interface ResourceMention {
+  person: string;
+  name: string;
+  source_id: string;
+  source_file: string;
+  quote: string;
+  context: string;
+}
+
+export interface ConsumedPaper {
+  person: string;
+  name: string;
+  source_id: string;
+  source_file: string;
+  relation: string | null;
+  verdicts: string[];
+  venue: string | null;
+  identifier: string | null;
+}
+
+export interface LibraryResource {
+  id: string;
+  title: string;
+  type: ResourceType;
+  authors: string[];
+  year: string | null;
+  field: string | null;
+  identified: boolean;
+  mentions: ResourceMention[];
+  consumed: ConsumedPaper[];
+}
+
+export interface LibraryStatus {
+  notes: number;
+  scanned: number;
+  pending: number;
+  updated: string | null;
+  scanning: boolean;
+}
+
+export interface LibraryData {
+  status: LibraryStatus;
+  resources: LibraryResource[];
 }
