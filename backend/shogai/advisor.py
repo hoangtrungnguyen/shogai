@@ -83,6 +83,10 @@ class Advisor:
                 line += f" — {p.summary}"
             if p.aliases:
                 line += f" (aka {', '.join(p.aliases)})"
+            if p.properties.get("priority") is not None:
+                line += f" [priority {p.properties['priority']}]"
+            if p.properties.get("follow_up"):
+                line += " [follow up]"
             lines.append(line)
         return len(people), "\n".join(lines) or "(empty — suggest adding someone on the Consume page)"
 

@@ -12,7 +12,7 @@ from shogai.schemas import FoundResource, LibraryExtraction
 
 NOTE_A = """# Minh
 - Book recommendation: 80-20
-- Tặng chị [[Hoàng Thương|Thương]] cuốn sách [[The Secret Garden]] này
+- Tặng chị [[Ngô Bích Liên|Liên]] cuốn sách [[The Secret Garden]] này
 - He says I should read Thinking, Fast and Slow before the trip
 """
 NOTE_B = "# Lan\n- Đang học giáo trình [[ベトナム人のための日本語]] mỗi tối\n"
@@ -25,7 +25,7 @@ def found(note, quote, title, rtype="book", identified=False, authors=()):
 
 EXTRACTION = LibraryExtraction(resources=[
     found(1, "Book recommendation: 80-20", "The 80/20 Principle", identified=True, authors=["Richard Koch"]),
-    found(1, "Tặng chị Thương cuốn sách The Secret Garden", "The Secret Garden"),
+    found(1, "Tặng chị Liên cuốn sách The Secret Garden", "The Secret Garden"),
     found(1, "He recommended Kahneman's book", "Thinking, Fast and Slow"),  # paraphrased quote, title is in note
     found(1, "read Attached by Levine", "Attached"),  # hallucinated: not in the notes
     found(1, "Đang học giáo trình ベトナム人のための日本語", "ベトナム人のための日本語", "textbook"),  # wrong note no.
@@ -53,7 +53,7 @@ def add_note(store, name, text):
 
 
 def test_plain_and_grounding_helpers():
-    assert plain("[[Hoàng Thương|Thương]] **bold** [x](http://y)") == "thương bold x"
+    assert plain("[[Ngô Bích Liên|Liên]] **bold** [x](http://y)") == "liên bold x"
     assert plain("𝗩𝗼̛́𝗶") == plain("Với")  # styled Unicode letters fold to plain text
     assert title_key("The 80/20 Principle") == title_key("80-20 principle")
     f = found(1, "nothing like this", "Thinking, Fast and Slow")

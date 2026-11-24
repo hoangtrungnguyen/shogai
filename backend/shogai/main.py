@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -13,7 +14,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from .advisor import Advisor
@@ -23,6 +24,7 @@ from .gemini import GeminiService, friendly_error
 from .ingest import IngestError, IngestPipeline, IngestRequest, detect_kind, link_kind
 from .jobs import JobManager
 from .library import Library
+from .properties import migrate_properties
 from .store import NotFound, Store, StoreError, now_iso, safe_filename
 from .synthesis import Synthesizer
 
@@ -46,6 +48,20 @@ class RawUpdate(BaseModel):
     markdown: str
 
 
+class PropertiesPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    priority: float | None = None
+    follow_up: bool | None = None
+    phone: str | None = None
+    email: str | None = None
+    linkedin: str | None = None
+    facebook: str | None = None
+    instagram: str | None = None
+    github: str | None = None
+    blog: str | None = None
+    related_webs: list[str] | None = None
+
+
 class ChatMessage(BaseModel):
     role: str
     content: str
@@ -64,6 +80,12 @@ def create_app(
 ) -> FastAPI:
     settings = settings or load_settings()
     store = Store(settings.data_dir)
+    migrated = migrate_properties(store)
+    if migrated["upgraded"]:
+        logging.getLogger("shogai").warning(
+            "Added profile properties to %d profile(s); %d value(s) filled from their notes.",
+            migrated["upgraded"], migrated["filled"],
+        )
     gem = gemini or GeminiService(settings)
     jobs = JobManager()
     pipeline = IngestPipeline(store, gem, settings, analyzers=analyzers, synthesizer=synthesizer)
@@ -131,6 +153,10 @@ def create_app(
     @app.put("/api/people/{slug}")
     async def update_person(slug: str, body: RawUpdate):
         return store.write_raw(slug, body.markdown).to_dict()
+
+    @app.patch("/api/people/{slug}/properties")
+    async def update_properties(slug: str, body: PropertiesPatch):
+        return store.update_properties(slug, body.model_dump(exclude_unset=True)).to_dict()
 
     @app.delete("/api/people/{slug}")
     async def delete_person(slug: str):

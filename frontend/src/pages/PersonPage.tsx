@@ -4,6 +4,7 @@ import { api, mediaUrl } from "../api";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { Markdown } from "../components/Markdown";
+import { PropertiesCard } from "../components/PropertiesCard";
 import { useJobs, usePeople } from "../state";
 import type { MediaFile, Person, SourceDetail, SourceRecord } from "../types";
 import { formatBytes, KIND_META, timeAgo } from "../util";
@@ -273,6 +274,14 @@ export function PersonPage() {
           </div>
         </div>
       </header>
+
+      <PropertiesCard
+        person={person}
+        onSaved={(p) => {
+          setPerson(p);
+          void refresh();
+        }}
+      />
 
       {running && (
         <div className="banner info">

@@ -2,6 +2,7 @@ import type {
   ChatEvent,
   Health,
   LibraryData,
+  PersonProperties,
   JobSnapshot,
   MediaFile,
   Person,
@@ -47,6 +48,8 @@ export const api = {
   createPerson: (body: { name: string; relationship?: string; aliases?: string[]; tags?: string[] }) =>
     request<Person>("/api/people", json("POST", body)),
   savePerson: (slug: string, markdown: string) => request<Person>(p(slug), json("PUT", { markdown })),
+  updateProperties: (slug: string, props: Partial<PersonProperties>) =>
+    request<Person>(`${p(slug)}/properties`, json("PATCH", props)),
   deletePerson: (slug: string) => request<{ deleted: string }>(p(slug), { method: "DELETE" }),
   rebuild: (slug: string) => request<JobSnapshot>(`${p(slug)}/rebuild`, { method: "POST" }),
   sources: (slug: string) => request<SourceRecord[]>(`${p(slug)}/sources`),

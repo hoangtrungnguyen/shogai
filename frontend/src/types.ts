@@ -1,5 +1,18 @@
 export type SourceKind = "image" | "text" | "video" | "audio" | "academic";
 
+export interface PersonProperties {
+  priority: number | null;
+  follow_up: boolean;
+  phone: string | null;
+  email: string | null;
+  linkedin: string | null;
+  facebook: string | null;
+  instagram: string | null;
+  github: string | null;
+  blog: string | null;
+  related_webs: string[];
+}
+
 export interface PersonSummary {
   slug: string;
   name: string;
@@ -11,6 +24,7 @@ export interface PersonSummary {
   created: string;
   updated: string;
   source_count: number;
+  properties: PersonProperties;
 }
 
 export interface Person extends PersonSummary {

@@ -73,6 +73,27 @@ data/library/
 data/.trash/            # deleted people / sources
 ```
 
+Every `profile.md` frontmatter carries these properties (Obsidian shows them as typed fields):
+
+```yaml
+priority: 1              # number (1 = highest, as in the imported notes)
+follow_up: true          # boolean
+phone: '0912345678'      # string (quoted so it stays text)
+email: name@example.com  # string
+linkedin: https://www.linkedin.com/in/…   # url
+facebook: https://www.facebook.com/…      # url
+instagram: handle                         # name, without @
+github: https://github.com/…              # url
+blog: https://…                           # url
+related_webs: [https://…]                 # list of urls
+```
+
+Edit them on the profile's *Details* card or by hand. They are filled automatically, never
+overwriting a value you set, from the person's own notes: note frontmatter (`fb:`, `linked:`, `web:`…),
+labelled lines (`Facebook: …`, `phone:: …`) and bare profile links. A bare link counts only when its handle
+matches the person's name; other links go to `related_webs`. Profiles created before these properties existed
+were upgraded once on startup (a backup of each is in `history/`).
+
 Plain Markdown with relative links — the `data/` folder opens fine in Obsidian or any editor.
 Hand edits are welcome (keep `name` in the frontmatter); the `## Source Log` section is regenerated.
 
@@ -122,6 +143,7 @@ cd backend && uv run pytest
 |---|---|
 | `GET /api/health` | config + Gemini status |
 | `GET/POST /api/people` | list / create (`{name, relationship}`) |
+| `PATCH /api/people/{slug}/properties` | update priority, follow_up, contacts (validated) |
 | `GET/PUT/DELETE /api/people/{slug}` | read / replace raw Markdown / move to trash |
 | `POST /api/people/{slug}/rebuild` | re-merge all sources (background job) |
 | `GET /api/people/{slug}/sources[/{sN}]`, `DELETE …/{sN}` | source notes |
