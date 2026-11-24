@@ -76,7 +76,7 @@ data/.trash/            # deleted people / sources
 Every `profile.md` frontmatter carries these properties (Obsidian shows them as typed fields):
 
 ```yaml
-priority: 1              # number (1 = highest, as in the imported notes)
+priority: 1              # whole number: 1 = highest, 4 = default
 follow_up: true          # boolean
 phone: '0912345678'      # string (quoted so it stays text)
 email: name@example.com  # string
@@ -93,6 +93,10 @@ overwriting a value you set, from the person's own notes: note frontmatter (`fb:
 labelled lines (`Facebook: …`, `phone:: …`) and bare profile links. A bare link counts only when its handle
 matches the person's name; other links go to `related_webs`. Profiles created before these properties existed
 were upgraded once on startup (a backup of each is in `history/`).
+
+Every profile has a priority. A blank or invalid value reads as the default, 4, and the app writes 4 into a
+blank one when it saves the profile. On startup, profiles with a blank priority get 4 without changing their
+`updated` date. A priority found in the notes replaces a 4, never any other level.
 
 Plain Markdown with relative links — the `data/` folder opens fine in Obsidian or any editor.
 Hand edits are welcome (keep `name` in the frontmatter); the `## Source Log` section is regenerated.
@@ -123,6 +127,34 @@ Tests (offline; Gemini is faked):
 cd backend && uv run pytest
 ```
 
+## Run with Docker
+
+One image holds the built UI and the API (http://127.0.0.1:8000). It reads `backend/.env` and mounts `./data`, so
+Docker and the scripts above share the same database. Needs Docker with Compose v2.
+
+```bash
+./scripts/docker.sh             # build shogai:<VERSION> from this checkout and start it
+./scripts/docker.sh logs -f     # any other arguments go to `docker compose`
+./scripts/docker.sh down
+```
+
+- The port is published on `127.0.0.1` only. Stop `./scripts/start.sh` first, or pick another port:
+  `SHOGAI_PORT=8080 ./scripts/docker.sh`.
+- Inside the container the data folder is always `/app/data`; change the `./data` mount in `docker-compose.yml`
+  to use another folder. On Linux, `./data` must be writable by uid 1000 (or set `user:` in that file).
+
+### Versions
+
+`VERSION` at the repo root is the release version. `./scripts/docker.sh` tags each build `shogai:<VERSION>` (and moves
+`shogai:latest` to it), and stamps the git commit (`-dirty` when the checkout has uncommitted changes) and the build
+time. The running version shows in the sidebar footer (hover it for commit and build time), in `GET /api/health`
+(`version`, `commit`, `built_at`) and as OCI labels (`docker inspect shogai:0.1.0`).
+
+- **Release:** set `VERSION` (e.g. `0.2.0`), then run `./scripts/docker.sh`. Earlier images stay: `docker images shogai`.
+- **Roll back:** `SHOGAI_VERSION=0.1.0 docker compose up -d --no-build` runs an image you built before.
+- `SHOGAI_IMAGE` renames the image (default `shogai`), e.g. `ghcr.io/you/shogai` before `./scripts/docker.sh push`.
+- Plain `docker compose up -d --build` works too; that build is tagged `shogai:latest` only, without commit or build time.
+
 ## Configuration (`backend/.env`)
 
 | Variable | Default | Purpose |
@@ -141,9 +173,9 @@ cd backend && uv run pytest
 
 | Method & path | |
 |---|---|
-| `GET /api/health` | config + Gemini status |
+| `GET /api/health` | version + build stamp, config, Gemini status |
 | `GET/POST /api/people` | list / create (`{name, relationship}`) |
-| `PATCH /api/people/{slug}/properties` | update priority, follow_up, contacts (validated) |
+| `PATCH /api/people/{slug}/properties` | update priority (whole number ≥ 1; `null` resets it to 4), follow_up, contacts (validated) |
 | `GET/PUT/DELETE /api/people/{slug}` | read / replace raw Markdown / move to trash |
 | `POST /api/people/{slug}/rebuild` | re-merge all sources (background job) |
 | `GET /api/people/{slug}/sources[/{sN}]`, `DELETE …/{sN}` | source notes |
@@ -156,7 +188,8 @@ cd backend && uv run pytest
 
 ## Privacy
 
-Everything is stored locally in `data/`. The server listens on `127.0.0.1` only. Content you consume is
+Everything is stored locally in `data/`. The server listens on `127.0.0.1` only (in Docker, the published port is
+bound to `127.0.0.1`). Content you consume is
 sent to the Gemini API for analysis (uploaded video/audio/PDF files are deleted from Gemini right after
 analysis; they would otherwise expire after 48 h). The analyzers are instructed not to infer sensitive
 traits (health, religion, sexuality, politics…) from appearance and not to identify people by their face.

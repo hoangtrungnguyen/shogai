@@ -36,6 +36,20 @@ def _resolve_dir(value: str) -> Path:
     return path.resolve()
 
 
+def _read_version() -> str:
+    try:
+        return (PROJECT_DIR / "VERSION").read_text(encoding="utf-8").strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+# Release version: the VERSION file at the repo root (copied into the Docker image).
+# Docker builds also record the git commit and build time (see scripts/docker.sh).
+VERSION = _read_version()
+BUILD_COMMIT = os.environ.get("SHOGAI_COMMIT", "").strip() or None
+BUILD_DATE = os.environ.get("SHOGAI_BUILD_DATE", "").strip() or None
+
+
 @dataclass(frozen=True)
 class Settings:
     gemini_api_key: str | None

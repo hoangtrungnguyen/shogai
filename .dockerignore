@@ -1,0 +1,20 @@
+# Build context for the Dockerfile. Secrets and the personal data folder never go to the Docker daemon.
+**/.env
+**/.env.*
+data/
+
+# Host-built artifacts (the image installs and builds its own)
+**/node_modules/
+**/.venv/
+frontend/dist/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+backend/tests/
+
+# Repo / editor clutter
+.git/
+.claude/
+.idea/
+.vscode/
+**/.DS_Store

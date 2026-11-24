@@ -1,7 +1,7 @@
 export type SourceKind = "image" | "text" | "video" | "audio" | "academic";
 
 export interface PersonProperties {
-  priority: number | null;
+  priority: number; // whole number, 1 = highest; DEFAULT_PRIORITY when not set
   follow_up: boolean;
   phone: string | null;
   email: string | null;
@@ -57,6 +57,9 @@ export interface MediaFile {
 
 export interface Health {
   ok: boolean;
+  version: string;
+  commit: string | null;
+  built_at: string | null;
   gemini_configured: boolean;
   models: { analyze: string; synthesize: string; advisor: string };
   language: string;

@@ -19,7 +19,7 @@ from starlette.concurrency import run_in_threadpool
 
 from .advisor import Advisor
 from .analyzers import Analyzer, Item
-from .config import Settings, load_settings
+from .config import BUILD_COMMIT, BUILD_DATE, VERSION, Settings, load_settings
 from .gemini import GeminiService, friendly_error
 from .ingest import IngestError, IngestPipeline, IngestRequest, detect_kind, link_kind
 from .jobs import JobManager
@@ -50,7 +50,7 @@ class RawUpdate(BaseModel):
 
 class PropertiesPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    priority: float | None = None
+    priority: int | None = Field(default=None, ge=1)  # 1 = highest; null resets to the default (4)
     follow_up: bool | None = None
     phone: str | None = None
     email: str | None = None
@@ -83,7 +83,7 @@ def create_app(
     migrated = migrate_properties(store)
     if migrated["upgraded"]:
         logging.getLogger("shogai").warning(
-            "Added profile properties to %d profile(s); %d value(s) filled from their notes.",
+            "Upgraded the properties of %d profile(s); %d value(s) filled from their notes.",
             migrated["upgraded"], migrated["filled"],
         )
     gem = gemini or GeminiService(settings)
@@ -93,7 +93,7 @@ def create_app(
     library = Library(store, gem, settings)
     tmp_root = settings.data_dir / ".tmp"
 
-    app = FastAPI(title="Shōgai API", version="0.1.0")
+    app = FastAPI(title="Shōgai API", version=VERSION)
     app.state.settings = settings
     app.state.store = store
     app.state.jobs = jobs
@@ -125,6 +125,9 @@ def create_app(
     async def health():
         return {
             "ok": True,
+            "version": VERSION,
+            "commit": BUILD_COMMIT,
+            "built_at": BUILD_DATE,
             "gemini_configured": gem.configured,
             "models": {
                 "analyze": settings.model_analyze,

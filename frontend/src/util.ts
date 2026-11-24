@@ -8,6 +8,9 @@ export const KIND_META: Record<SourceKind, { label: string; hint: string }> = {
   academic: { label: "Paper", hint: "Academic paper — fact-checked" },
 };
 
+/** Every profile has a priority: 1 is the highest; people nobody ranked get this. */
+export const DEFAULT_PRIORITY = 4;
+
 const INK = ["#c4452f", "#2f4a6b", "#5f7d45", "#a87b2a", "#7a4a6e", "#3d6e6b", "#8a5a3c"];
 
 export function inkColor(seed: string): string {

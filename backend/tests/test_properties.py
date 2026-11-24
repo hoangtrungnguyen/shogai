@@ -5,7 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from shogai.main import create_app
-from shogai.properties import PROPERTY_KEYS, extract_from_note, migrate_properties
+from shogai.advisor import Advisor
+from shogai.properties import DEFAULT_PRIORITY, PROPERTY_KEYS, coerce, extract_from_note, migrate_properties
 from shogai.store import StoreError, join_frontmatter, split_frontmatter
 
 NOTE = """---
@@ -51,7 +52,7 @@ def test_profile_frontmatter_has_all_properties_and_quotes_phone(store):
     person = store.create("Ana Lima")
     meta, _ = split_frontmatter(person.raw)
     assert list(meta)[:12] == ["name", "relationship", *PROPERTY_KEYS]
-    assert "priority:\n" in person.raw and "related_webs: []" in person.raw
+    assert "priority: 4\n" in person.raw and "related_webs: []" in person.raw
     updated = store.update_properties(person.slug, {"phone": "0901234567", "priority": "1", "follow_up": True,
                                                     "instagram": "@ana", "related_webs": ["ana.dev"]})
     assert "phone: '0901234567'" in updated.raw  # Obsidian would otherwise read a number
@@ -64,6 +65,39 @@ def test_profile_frontmatter_has_all_properties_and_quotes_phone(store):
         == ["email", "related_webs"]
     props = store.get(person.slug).properties
     assert props["priority"] == 1 and props["related_webs"] == ["https://ana.dev", "https://x.org"]
+
+
+@pytest.mark.parametrize("raw, level", [
+    (1, 1), ("2", 2), (" P3 ", 3), ("p1", 1), (2.0, 2), (7, 7),
+    (None, 4), ("", 4), (0, 4), (-1, 4), (2.5, 4), ("high", 4), (True, 4), ("nan", 4), ("inf", 4),
+])
+def test_priority_is_a_whole_number_from_1_with_default_4(raw, level):
+    assert DEFAULT_PRIORITY == 4
+    assert coerce("priority", raw) == level
+
+
+def test_every_profile_has_a_priority(store):
+    person = store.create("Ana Lima")
+    assert person.properties["priority"] == 4
+    # a priority found in the notes replaces the default, but never a level the user chose
+    assert store.fill_properties(person.slug, {"priority": 2}) == ["priority"]
+    assert store.fill_properties(person.slug, {"priority": 1}) == []
+    assert store.get(person.slug).properties["priority"] == 2
+    # clearing it resets to the default
+    assert store.update_properties(person.slug, {"priority": None}).properties["priority"] == 4
+    # a blank priority from a hand edit reads as the default, and is written back as it
+    path = store.profile_path(person.slug)
+    path.write_text(path.read_text().replace("priority: 4\n", "priority:\n"))
+    assert store.get(person.slug).properties["priority"] == 4
+    assert "priority: 4\n" in store.write_raw(person.slug, path.read_text()).raw
+
+
+def test_advisor_tags_only_priorities_off_the_default(store):
+    store.create("Ana Lima")
+    store.update_properties(store.create("Phạm Quốc Bảo").slug, {"priority": 1})
+    prompt = Advisor(store, gem=None, settings=None).system_prompt([])
+    assert "1 = highest (no tag means the default, 4)" in prompt
+    assert "- Ana Lima (id: ana-lima)\n- Phạm Quốc Bảo (id: pham-quoc-bao) [priority 1]\n" in prompt
 
 
 def test_migration_fills_from_notes_once(store):
@@ -81,9 +115,26 @@ def test_migration_fills_from_notes_once(store):
     assert store.get(person.slug).updated == before  # upgrade doesn't count as an edit
     props = store.get(person.slug).properties
     assert props["facebook"] == "https://www.facebook.com/quocbao.pham.21" and props["priority"] == 2
-    store.update_properties(person.slug, {"priority": None})  # user clears it
+    store.update_properties(person.slug, {"priority": None})  # user clears it: back to the default
     assert migrate_properties(store) == {"upgraded": 0, "filled": 0}
-    assert store.get(person.slug).properties["priority"] is None
+    assert store.get(person.slug).properties["priority"] == 4
+
+
+def test_migration_gives_blank_priorities_the_default(store):
+    person = store.create("Ana Lima")
+    note = store.new_media_path(person.slug, "note.md")
+    note.write_text("---\npriority: 1\n---\nAna")
+    store.add_source(person.slug, kind="text", title="note", summary="", markdown="x", media=f"media/{note.name}")
+    path = store.profile_path(person.slug)
+    path.write_text(path.read_text().replace("priority: 4\n", "priority:\n"))  # as saved before the default existed
+
+    before = store.get(person.slug).updated
+    assert migrate_properties(store) == {"upgraded": 1, "filled": 0}
+    after = store.get(person.slug)
+    # the key was there, so the user may have cleared it: the notes don't refill it
+    assert after.properties["priority"] == 4 and "priority: 4\n" in after.raw
+    assert after.updated == before
+    assert migrate_properties(store) == {"upgraded": 0, "filled": 0}
 
 
 @pytest.fixture
@@ -97,7 +148,9 @@ def client(settings):
 
 
 def test_properties_api_and_ingest_fill(client):
-    client.post("/api/people", json={"name": "Ana Lima"})
+    assert client.post("/api/people", json={"name": "Ana Lima"}).json()["properties"]["priority"] == 4
+    for bad in (0, -2, 1.5, "high"):
+        assert client.patch("/api/people/ana-lima/properties", json={"priority": bad}).status_code == 422
     r = client.patch("/api/people/ana-lima/properties", json={"priority": 2, "follow_up": True, "blog": "ana.blog"})
     assert r.status_code == 200
     assert r.json()["properties"]["blog"] == "https://ana.blog"
@@ -112,3 +165,5 @@ def test_properties_api_and_ingest_fill(client):
     assert any("Filled properties" in c for c in state["result"]["changes"]), json.dumps(state["result"])
     props = client.get("/api/people/ana-lima").json()["properties"]
     assert props["email"] == "ana@lima.dev" and props["phone"] == "0912 345 678" and props["priority"] == 2
+    r = client.patch("/api/people/ana-lima/properties", json={"priority": None})
+    assert r.json()["properties"]["priority"] == 4

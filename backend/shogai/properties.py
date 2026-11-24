@@ -6,6 +6,9 @@
     instagram: name         github: url
     blog: url               related_webs: [url, …]
 
+Every profile has a priority: a whole number where 1 is the highest. Blank or invalid values mean the
+default, 4.
+
 They can be filled from the user's own notes: Obsidian-style frontmatter (`fb:`, `linked:`, `web:` …),
 labelled lines (`Facebook: …`, `phone:: …`, `[Facebook](…)`) and bare profile links. A bare social
 link is only attributed to the person when its handle matches their name; otherwise it is kept in
@@ -28,13 +31,23 @@ PROPERTY_KEYS = [
     "priority", "follow_up", "phone", "email", "linkedin", "facebook", "instagram", "github", "blog", "related_webs",
 ]
 URL_KEYS = {"linkedin", "facebook", "github", "blog"}
+DEFAULT_PRIORITY = 4  # 1 = highest
 
 
 def default_properties() -> dict[str, Any]:
     return {
-        "priority": None, "follow_up": False, "phone": None, "email": None, "linkedin": None,
+        "priority": DEFAULT_PRIORITY, "follow_up": False, "phone": None, "email": None, "linkedin": None,
         "facebook": None, "instagram": None, "github": None, "blog": None, "related_webs": [],
     }
+
+
+def apply_defaults(meta: dict[str, Any]) -> dict[str, Any]:
+    """Add the missing property keys to profile frontmatter; a blank priority gets the default."""
+    for key, value in default_properties().items():
+        meta.setdefault(key, value)
+    if meta["priority"] in (None, ""):
+        meta["priority"] = DEFAULT_PRIORITY
+    return meta
 
 
 # ------------------------------------------------------------------ normalizing
@@ -57,14 +70,15 @@ def instagram_handle(value: Any) -> str | None:
     return s or None
 
 
-def _priority(value: Any) -> int | float | None:
-    if value is None or isinstance(value, bool) or str(value).strip() == "":
-        return None
+def _priority(value: Any) -> int:
+    """A whole number >= 1 ("P2" reads as 2). Blank or invalid values give the default."""
+    if value is None or isinstance(value, bool):
+        return DEFAULT_PRIORITY
     try:
-        num = float(str(value).strip())
+        num = float(re.sub(r"^[pP]\s*", "", str(value).strip()))
     except ValueError:
-        return None
-    return int(num) if num.is_integer() else num
+        return DEFAULT_PRIORITY
+    return int(num) if num.is_integer() and num >= 1 else DEFAULT_PRIORITY
 
 
 def _boolean(value: Any) -> bool:
@@ -114,8 +128,11 @@ def coerce_properties(meta: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_empty(key: str, value: Any) -> bool:
+    """Unset or still at its default, so a value found in the notes may fill it."""
     if key == "follow_up":
         return value is not True
+    if key == "priority":
+        return value in (None, "", DEFAULT_PRIORITY)
     return value in (None, "", [])
 
 
@@ -306,17 +323,23 @@ def properties_from_notes(store: "Store", slug: str) -> dict[str, Any]:
 
 
 def migrate_properties(store: "Store") -> dict[str, int]:
-    """One-time upgrade: give every profile the property keys, pre-filled from the person's own notes.
-    Profiles that already have all keys are skipped, so values the user cleared stay cleared."""
+    """One-time upgrade of older profiles, keeping their dates:
+    - missing property keys are added, pre-filled from the person's own notes;
+    - a blank priority gets the default. The notes aren't consulted here: the user may have cleared it.
+    Profiles already upgraded are skipped."""
     from .store import split_frontmatter
 
     stats = {"upgraded": 0, "filled": 0}
     for person in store.list_people():
         meta, _ = split_frontmatter(store.profile_path(person.slug).read_text(encoding="utf-8"))
-        if all(k in meta for k in PROPERTY_KEYS):
+        missing = [k for k in PROPERTY_KEYS if k not in meta]
+        blank_priority = meta.get("priority") in (None, "")
+        if not missing and not blank_priority:
             continue
-        found = properties_from_notes(store, person.slug)
-        updates = {k: coerce(k, v) for k, v in found.items() if k not in meta}
+        found = properties_from_notes(store, person.slug) if missing else {}
+        updates = {k: coerce(k, v) for k, v in found.items() if k in missing}
+        if blank_priority:
+            updates.setdefault("priority", DEFAULT_PRIORITY)
         store.save_profile(person.slug, meta_updates=updates, touch=False)  # not a content change
         stats["upgraded"] += 1
         stats["filled"] += sum(1 for k, v in updates.items() if not is_empty(k, v))

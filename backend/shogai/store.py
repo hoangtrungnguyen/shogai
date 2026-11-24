@@ -28,7 +28,7 @@ from typing import Any
 
 import yaml
 
-from .properties import PROPERTY_KEYS, coerce, coerce_properties, default_properties, is_empty
+from .properties import PROPERTY_KEYS, apply_defaults, coerce, coerce_properties, default_properties, is_empty
 
 PROFILE_FILE = "profile.md"
 SOURCES_DIR = "sources"
@@ -156,9 +156,8 @@ def join_frontmatter(meta: dict[str, Any], body: str) -> str:
 
 def order_profile_meta(meta: dict[str, Any]) -> dict[str, Any]:
     """Canonical key order for profile frontmatter; every property key is present."""
-    for key, value in default_properties().items():
-        meta.setdefault(key, value)
-    ordered = {k: meta[k] for k in FRONTMATTER_ORDER if k in meta}
+    apply_defaults(meta)
+    ordered ={k: meta[k] for k in FRONTMATTER_ORDER if k in meta}
     ordered.update({k: v for k, v in meta.items() if k not in ordered})
     return ordered
 
@@ -405,8 +404,7 @@ class Store:
             self._backup(slug, path.read_text(encoding="utf-8"))
             meta["updated"] = now_iso()
             meta["sources"] = len(self._source_files(slug))
-            for key, value in default_properties().items():  # keep every property present
-                meta.setdefault(key, value)
+            apply_defaults(meta)  # keep every property present
             atomic_write(
                 path,
                 join_frontmatter(meta, strip_source_log(body) + "\n\n" + self._render_source_log(slug)),

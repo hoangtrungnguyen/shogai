@@ -15,6 +15,7 @@ from google.genai import types
 from .config import Settings
 from .gemini import GeminiService
 from .prompts import ADVISOR_SYSTEM
+from .properties import DEFAULT_PRIORITY
 from .store import Store, StoreError
 
 MAX_TOOL_ROUNDS = 6
@@ -83,7 +84,7 @@ class Advisor:
                 line += f" — {p.summary}"
             if p.aliases:
                 line += f" (aka {', '.join(p.aliases)})"
-            if p.properties.get("priority") is not None:
+            if p.properties["priority"] != DEFAULT_PRIORITY:  # the prompt explains a missing tag
                 line += f" [priority {p.properties['priority']}]"
             if p.properties.get("follow_up"):
                 line += " [follow up]"
@@ -106,7 +107,8 @@ class Advisor:
         focus_text = ""
         if blocks:
             focus_text = "\nThe user is currently focused on the following people; their full profiles are included:\n" + "\n".join(blocks)
-        return ADVISOR_SYSTEM.format(today=date.today().isoformat(), count=count, index=index, focus=focus_text)
+        return ADVISOR_SYSTEM.format(today=date.today().isoformat(), count=count, index=index, focus=focus_text,
+                                     default_priority=DEFAULT_PRIORITY)
 
     # ------------------------------------------------------------------- tools
     def execute_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:

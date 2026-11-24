@@ -4,7 +4,7 @@ import { api } from "../api";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { usePeople } from "../state";
-import { timeAgo } from "../util";
+import { DEFAULT_PRIORITY, timeAgo } from "../util";
 
 function NewPersonForm({ onClose }: { onClose: () => void }) {
   const { refresh } = usePeople();
@@ -74,11 +74,8 @@ export function PeoplePage() {
     )
     .sort((a, b) => {
       if (sort === "updated") return b.updated.localeCompare(a.updated);
-      if (sort === "priority") {
-        const pa = a.properties.priority ?? Infinity;
-        const pb = b.properties.priority ?? Infinity;
-        if (pa !== pb) return pa - pb;
-      }
+      if (sort === "priority" && a.properties.priority !== b.properties.priority)
+        return a.properties.priority - b.properties.priority;
       return a.name.localeCompare(b.name);
     });
 
@@ -118,7 +115,7 @@ export function PeoplePage() {
             Sort
             <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
               <option value="name">Name</option>
-              <option value="priority">Priority (lowest number first)</option>
+              <option value="priority">Priority (1 = highest)</option>
               <option value="updated">Recently updated</option>
             </select>
           </label>
@@ -152,7 +149,12 @@ export function PeoplePage() {
                 <p className="muted truncate">{p.relationship || "relationship not set"}</p>
               </div>
               <div className="card-badges">
-                {p.properties.priority != null && <span className="prio">P{p.properties.priority}</span>}
+                <span
+                  className={`prio${p.properties.priority >= DEFAULT_PRIORITY ? " low" : ""}`}
+                  title="Priority (1 = highest)"
+                >
+                  P{p.properties.priority}
+                </span>
                 {p.properties.follow_up && (
                   <span className="follow on" title="Follow up">
                     <Icon name="flag" size={13} />

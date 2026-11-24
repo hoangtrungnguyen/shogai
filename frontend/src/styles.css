@@ -397,12 +397,26 @@ h4 {
 
 .side-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
   padding: 8px 10px 0;
   border-top: 1px solid var(--line);
   font-size: 12px;
   color: var(--muted);
+}
+
+.side-status {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Own line, aligned with the status text (dot 8px + gap 8px). */
+.side-version {
+  flex-basis: 100%;
+  padding-left: 16px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .dot {
@@ -2176,7 +2190,7 @@ h4 {
   white-space: nowrap;
 }
 
-.prio.unset {
+.prio.low {
   background: var(--paper-deep);
   color: var(--muted);
   font-weight: 500;
