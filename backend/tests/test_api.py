@@ -1,5 +1,6 @@
 """API + pipeline tests with Gemini replaced by fakes (no network)."""
 
+import asyncio
 import json
 import time
 
@@ -107,6 +108,23 @@ def test_detect_kind_and_overrides():
         link_kind("ftp://example.com/x")
     with pytest.raises(IngestError):
         link_kind("https://vimeo.com/1", "video")
+
+
+def test_stopping_the_server_lets_running_jobs_finish(settings):
+    async def slow_analyzer(gem, settings, ctx, item, status):
+        await asyncio.sleep(0.5)
+        return await fake_analyzer(gem, settings, ctx, item, status)
+
+    app = create_app(settings=settings, gemini=FakeGem(), analyzers={"text": slow_analyzer}, synthesizer=fake_synth)
+    with TestClient(app) as client:
+        client.post("/api/people", json={"name": "Ana"})
+        resp = client.post("/api/ingest", data={"person": "ana", "thoughts": "She loves matcha."})
+        assert resp.status_code == 202, resp.text
+        job_id = resp.json()["id"]
+    # Leaving the block stops the app while the job is still analysing; it must finish, not be cut off.
+    job = app.state.jobs.get(job_id)
+    assert job.status == "done", job.error
+    assert list((settings.data_dir / "people" / "ana" / "sources").glob("s*.md"))
 
 
 def test_health_reports_version(client):

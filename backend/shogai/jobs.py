@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from collections import OrderedDict
 from typing import Any, AsyncIterator
@@ -11,6 +12,8 @@ from .store import now_iso
 
 MAX_JOBS = 100
 HEARTBEAT_S = 15.0
+
+log = logging.getLogger("shogai")
 
 
 class Job:
@@ -105,3 +108,20 @@ class JobManager:
 
     def list(self) -> list[Job]:
         return list(reversed(self._jobs.values()))
+
+    async def drain(self, timeout: float) -> int:
+        """Wait up to `timeout` seconds for running jobs; return how many are still running.
+
+        Called when the server stops (e.g. a deploy), so jobs write their results instead of
+        being cancelled half-way.
+        """
+        tasks = [j.task for j in self._jobs.values() if j.task is not None and not j.task.done()]
+        if not tasks:
+            return 0
+        log.warning("Stopping: waiting up to %.0fs for %d running job(s) to finish…", timeout, len(tasks))
+        _, pending = await asyncio.wait(tasks, timeout=timeout)
+        if pending:
+            log.warning("%d job(s) still running after %.0fs; they will be cancelled.", len(pending), timeout)
+        else:
+            log.warning("All jobs finished.")
+        return len(pending)

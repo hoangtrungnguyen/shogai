@@ -2,8 +2,9 @@
 .env
 backend/.env
 
-# Personal data (the Markdown database)
+# Personal data (the Markdown database and its backups)
 data/
+backups/
 
 # Python
 backend/.venv/

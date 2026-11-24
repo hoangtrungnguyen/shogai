@@ -66,6 +66,7 @@ class Settings:
     frontend_dist: Path
     host: str
     port: int
+    shutdown_grace: float  # seconds running jobs get to finish when the server stops
 
     def with_overrides(self, **kwargs) -> "Settings":
         return replace(self, **kwargs)
@@ -95,4 +96,5 @@ def load_settings() -> Settings:
         frontend_dist=_resolve_dir(_env("SHOGAI_FRONTEND_DIST", "frontend/dist")),
         host=_env("SHOGAI_HOST", "127.0.0.1"),
         port=int(_env("SHOGAI_PORT", "8000")),
+        shutdown_grace=float(_env("SHOGAI_SHUTDOWN_GRACE", "240")),
     )

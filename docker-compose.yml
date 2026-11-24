@@ -1,11 +1,14 @@
 # Shōgai in Docker: UI + API on http://127.0.0.1:8000
 #
-#   ./scripts/docker.sh                  build shogai:<VERSION> from this checkout and start it
+#   ./scripts/docker.sh                  deploy: build shogai:<VERSION>, stop the running version
+#                                        (running jobs finish first), back up the data, start the new one
+#   ./scripts/docker.sh backup           back up the data folder now
+#   ./scripts/docker.sh restore FILE     put a backup back (the current data is backed up first)
 #   ./scripts/docker.sh logs -f          any other arguments go to `docker compose`
 #   SHOGAI_VERSION=0.1.0 docker compose up -d --no-build     run an older image
 #
-# Plain `docker compose up -d --build` works too; the build is then tagged shogai:latest only and
-# carries no commit / build time (the app still reports the version from the VERSION file).
+# Plain `docker compose up -d --build` also works, but it takes no backup and tags the image
+# shogai:latest only, without commit or build time.
 name: shogai
 
 services:
@@ -28,8 +31,19 @@ services:
       # Localhost only: the app has no login and holds personal data.
       - "127.0.0.1:${SHOGAI_PORT:-8000}:8000"
     volumes:
-      # The Markdown database, shared with ./scripts/start.sh and dev.sh.
-      - ./data:/app/data
-    # The image runs as uid 1000. On Linux, if ./data belongs to another user, set your own uid:gid:
+      # The Markdown database lives on the host, so every version starts with the same data.
+      # SHOGAI_DATA_PATH moves it (e.g. outside this repo). The folder is never created
+      # automatically: a wrong path stops the start instead of opening an empty database.
+      - type: bind
+        source: ${SHOGAI_DATA_PATH:-./data}
+        target: /app/data
+        bind:
+          create_host_path: false
+    # The image runs as uid 1000. On Linux, if the data folder belongs to another user, set your uid:gid:
     # user: "1001:1001"
+    # On stop the app lets running jobs finish (up to SHOGAI_SHUTDOWN_GRACE, 240 s); Docker waits for it.
+    stop_grace_period: 5m
+    # A small init as PID 1 passes the stop signal on; without it, a stop that arrives while the
+    # app is still starting is ignored and Docker waits the full 5 minutes.
+    init: true
     restart: unless-stopped

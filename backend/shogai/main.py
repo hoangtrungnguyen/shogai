@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import shutil
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +27,7 @@ from .ingest import IngestError, IngestPipeline, IngestRequest, detect_kind, lin
 from .jobs import JobManager
 from .library import Library
 from .properties import migrate_properties
-from .store import NotFound, Store, StoreError, now_iso, safe_filename
+from .store import NotFound, Store, StoreError, atomic_write, now_iso, safe_filename
 from .synthesis import Synthesizer
 
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
@@ -93,7 +95,14 @@ def create_app(
     library = Library(store, gem, settings)
     tmp_root = settings.data_dir / ".tmp"
 
-    app = FastAPI(title="Shōgai API", version=VERSION)
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        yield
+        # Stopping (a deploy, `docker compose stop`, Ctrl-C): let running jobs write their
+        # results instead of cancelling them half-way.
+        await jobs.drain(settings.shutdown_grace)
+
+    app = FastAPI(title="Shōgai API", version=VERSION, lifespan=lifespan)
     app.state.settings = settings
     app.state.store = store
     app.state.jobs = jobs
@@ -253,7 +262,7 @@ def create_app(
                         note=thoughts_note.strip())
             if settings.keep_media:  # keep the raw note too, so later scans (e.g. the library) can read it
                 dest = store.new_media_path(target.slug, "thoughts.md")
-                dest.write_text(thoughts.strip() + "\n", encoding="utf-8")
+                atomic_write(dest, thoughts.strip() + "\n")
                 item.media, item.original = f"media/{dest.name}", "thoughts.md"
             items.append(item)
         for upload, fk, note in kinds:
@@ -359,9 +368,12 @@ def create_app(
 
 
 def _copy_upload(upload: UploadFile, dest: Path) -> None:
+    """Write an upload via a hidden temp file, so an interrupted copy never leaves a partial file."""
     upload.file.seek(0)
-    with dest.open("wb") as out:
+    tmp = dest.with_name(f".{dest.name}.part")
+    with tmp.open("wb") as out:
         shutil.copyfileobj(upload.file, out, length=1024 * 1024)
+    os.replace(tmp, dest)
 
 
 app = create_app()

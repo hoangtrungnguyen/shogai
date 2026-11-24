@@ -129,19 +129,47 @@ cd backend && uv run pytest
 
 ## Run with Docker
 
-One image holds the built UI and the API (http://127.0.0.1:8000). It reads `backend/.env` and mounts `./data`, so
-Docker and the scripts above share the same database. Needs Docker with Compose v2.
+One image holds the built UI and the API (http://127.0.0.1:8000). It reads `backend/.env` and mounts the data
+folder (`./data`), so Docker and the scripts above share the same database. Needs Docker with Compose v2.
 
 ```bash
-./scripts/docker.sh             # build shogai:<VERSION> from this checkout and start it
+./scripts/docker.sh             # deploy this checkout as shogai:<VERSION> (first time: mkdir data)
 ./scripts/docker.sh logs -f     # any other arguments go to `docker compose`
 ./scripts/docker.sh down
 ```
 
 - The port is published on `127.0.0.1` only. Stop `./scripts/start.sh` first, or pick another port:
   `SHOGAI_PORT=8080 ./scripts/docker.sh`.
-- Inside the container the data folder is always `/app/data`; change the `./data` mount in `docker-compose.yml`
-  to use another folder. On Linux, `./data` must be writable by uid 1000 (or set `user:` in that file).
+- On Linux, the data folder must be writable by uid 1000 (or set `user:` in `docker-compose.yml`).
+
+### Deploys keep your data
+
+`./scripts/docker.sh` deploys in this order and stops at the first problem:
+
+1. Builds the new image while the current version keeps serving, then checks there's free disk space for the
+   backup (up to the data folder's size). If not, it stops here and the current version keeps running.
+2. Stops the current version. Running jobs (consume, rebuild, library scan) get up to 4 minutes to finish
+   (`SHOGAI_SHUTDOWN_GRACE`); Docker waits up to 5.
+3. Backs up the data folder to `backups/<time>-deploy-<old>-to-<new>.tar.gz` and reads the archive back. If the
+   backup fails, the old version is started again and nothing is deployed.
+4. Starts the new version and waits until it reports healthy; if it doesn't, it prints how to go back.
+
+The data lives on the host, never in the image or the container, so new images, rebuilds and `docker compose down`
+(with or without `-v`) leave it alone. Files are written to a temp file and then renamed, so a stop or crash never
+leaves half a file. The data folder is never created automatically: a wrong path stops the start instead of opening
+an empty database.
+
+- **Data outside the repo:** set `SHOGAI_DATA_PATH` and `SHOGAI_BACKUP_PATH` in your shell (e.g. `~/Shogai/data`,
+  `~/Shogai/backups`), so a re-clone or `git clean -X` can't take them along.
+- **Backups:** `./scripts/docker.sh backup` makes one now. The newest 20 are kept (`SHOGAI_BACKUP_KEEP`, `0` keeps
+  all). `backups/` is gitignored and never sent to the Docker build.
+- **Restore:** `./scripts/docker.sh restore backups/<file>.tar.gz` stops Shōgai, backs up the current data
+  (`…-before-restore.tar.gz`), then puts the archive's data in place.
+- **Roll back a release:** restore the backup its deploy made, then start the older image:
+  `SHOGAI_VERSION=0.1.0 docker compose up -d --no-build`. Restore first, because the newer version may have changed
+  the files in ways the older one doesn't expect. Changes made after that backup stay in the `before-restore` backup.
+- Point Docker or the local scripts at a data folder, not both at once.
+- Advisor chats are stored in the browser for each address; keep using the same URL to see them.
 
 ### Versions
 
@@ -151,9 +179,9 @@ time. The running version shows in the sidebar footer (hover it for commit and b
 (`version`, `commit`, `built_at`) and as OCI labels (`docker inspect shogai:0.1.0`).
 
 - **Release:** set `VERSION` (e.g. `0.2.0`), then run `./scripts/docker.sh`. Earlier images stay: `docker images shogai`.
-- **Roll back:** `SHOGAI_VERSION=0.1.0 docker compose up -d --no-build` runs an image you built before.
 - `SHOGAI_IMAGE` renames the image (default `shogai`), e.g. `ghcr.io/you/shogai` before `./scripts/docker.sh push`.
-- Plain `docker compose up -d --build` works too; that build is tagged `shogai:latest` only, without commit or build time.
+- Plain `docker compose up -d --build` works too, but takes no backup and tags the build `shogai:latest` only,
+  without commit or build time.
 
 ## Configuration (`backend/.env`)
 
@@ -168,6 +196,7 @@ time. The running version shows in the sidebar footer (hover it for commit and b
 | `SHOGAI_DATA_DIR` | `data` | Database folder (relative to repo root) |
 | `SHOGAI_KEEP_MEDIA` | `true` | Keep original uploads next to the profile |
 | `SHOGAI_GEMINI_API_VERSION` | `v1beta` | Gemini API version (keys in the `AQ.` format need `v1beta`) |
+| `SHOGAI_SHUTDOWN_GRACE` | `240` | Seconds running jobs get to finish when the server stops (deploy, Ctrl-C); keep it under Docker's 5-minute stop timeout |
 
 ## API
 
