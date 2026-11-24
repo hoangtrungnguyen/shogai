@@ -57,6 +57,9 @@ export interface MediaFile {
 
 export interface Health {
   ok: boolean;
+  version: string;
+  commit: string | null;
+  built_at: string | null;
   gemini_configured: boolean;
   models: { analyze: string; synthesize: string; advisor: string };
   language: string;

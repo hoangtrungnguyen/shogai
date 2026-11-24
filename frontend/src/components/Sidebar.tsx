@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useJobs, usePeople, type TrackedJob } from "../state";
+import type { Health } from "../types";
 import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 
 const JOB_LABEL: Record<TrackedJob["kind"], string> = { ingest: "Consume", rebuild: "Rebuild", library: "Library scan" };
+
+/** Commit and build time of a Docker build (absent when run from source). */
+function buildStamp(health: Health): string {
+  const parts = [health.commit && `commit ${health.commit}`, health.built_at && `built ${health.built_at}`];
+  return parts.filter(Boolean).join(" · ") || "Running from source";
+}
 
 function JobRow({ job, onDismiss }: { job: TrackedJob; onDismiss: () => void }) {
   const navigate = useNavigate();
@@ -115,7 +122,14 @@ export function Sidebar() {
 
       <div className="side-foot" title={health?.data_dir}>
         <span className={`dot ${health?.gemini_configured ? "ok" : "bad"}`} />
-        {health ? (health.gemini_configured ? `Gemini · ${health.models.analyze}` : "Gemini key missing") : "Backend offline"}
+        <span className="side-status">
+          {health ? (health.gemini_configured ? `Gemini · ${health.models.analyze}` : "Gemini key missing") : "Backend offline"}
+        </span>
+        {health && (
+          <span className="side-version" title={buildStamp(health)}>
+            v{health.version}
+          </span>
+        )}
       </div>
     </aside>
   );

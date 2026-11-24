@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from google.genai import types
 
 from shogai.analyzers import AnalysisResult, render_source_markdown
+from shogai.config import PROJECT_DIR
 from shogai.ingest import IngestError, detect_kind, link_kind
 from shogai.main import create_app
 from shogai.schemas import ImageAnalysis, Observation, ProfileUpdate, SourceAnalysis
@@ -106,6 +107,12 @@ def test_detect_kind_and_overrides():
         link_kind("ftp://example.com/x")
     with pytest.raises(IngestError):
         link_kind("https://vimeo.com/1", "video")
+
+
+def test_health_reports_version(client):
+    health = client.get("/api/health").json()
+    assert health["version"] == (PROJECT_DIR / "VERSION").read_text().strip()
+    assert {"commit", "built_at"} <= health.keys()
 
 
 def test_people_crud(client):

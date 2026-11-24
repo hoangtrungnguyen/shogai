@@ -1,0 +1,35 @@
+# Shōgai in Docker: UI + API on http://127.0.0.1:8000
+#
+#   ./scripts/docker.sh                  build shogai:<VERSION> from this checkout and start it
+#   ./scripts/docker.sh logs -f          any other arguments go to `docker compose`
+#   SHOGAI_VERSION=0.1.0 docker compose up -d --no-build     run an older image
+#
+# Plain `docker compose up -d --build` works too; the build is then tagged shogai:latest only and
+# carries no commit / build time (the app still reports the version from the VERSION file).
+name: shogai
+
+services:
+  shogai:
+    image: ${SHOGAI_IMAGE:-shogai}:${SHOGAI_VERSION:-latest}
+    build:
+      context: .
+      args:
+        APP_VERSION: ${SHOGAI_VERSION:-}
+        GIT_COMMIT: ${SHOGAI_COMMIT:-}
+        BUILD_DATE: ${SHOGAI_BUILD_DATE:-}
+      tags:
+        - ${SHOGAI_IMAGE:-shogai}:latest
+    env_file: backend/.env # GEMINI_API_KEY and optional SHOGAI_* settings
+    environment:
+      # Paths inside the container; these win over the same keys in backend/.env.
+      SHOGAI_DATA_DIR: /app/data
+      SHOGAI_FRONTEND_DIST: /app/frontend/dist
+    ports:
+      # Localhost only: the app has no login and holds personal data.
+      - "127.0.0.1:${SHOGAI_PORT:-8000}:8000"
+    volumes:
+      # The Markdown database, shared with ./scripts/start.sh and dev.sh.
+      - ./data:/app/data
+    # The image runs as uid 1000. On Linux, if ./data belongs to another user, set your own uid:gid:
+    # user: "1001:1001"
+    restart: unless-stopped
