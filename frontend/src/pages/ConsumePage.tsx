@@ -193,9 +193,17 @@ export function ConsumePage() {
   }
 
   const hasPerson = effectiveMode === "existing" ? !!personSlug : !!newName.trim();
-  const hasInput = !!thoughts.trim() || files.length > 0 || links.length > 0;
+  // A link typed in the box but not added with "Add" is consumed too, not silently dropped.
+  const typedLink = linkInput.trim();
+  const hasInput = !!thoughts.trim() || files.length > 0 || links.length > 0 || !!typedLink;
 
   async function submit() {
+    const typedKinds = typedLink ? linkKinds(typedLink) : null;
+    if (typedLink && !typedKinds) {
+      setError(`Not a valid http(s) link: ${typedLink}`);
+      return;
+    }
+    const allLinks = typedKinds ? [...links, { url: typedLink, kind: typedKinds.kind, note: "" }] : links;
     setBusy(true);
     setError(undefined);
     try {
@@ -213,13 +221,14 @@ export function ConsumePage() {
         slug,
         thoughts,
         files.map((f) => ({ file: f.file, kind: f.kind, note: f.note })),
-        links.map((l) => ({ url: l.url, kind: l.kind, note: l.note })),
+        allLinks.map((l) => ({ url: l.url, kind: l.kind, note: l.note })),
       );
       track(snapshot);
       setParams({ person: slug, job: snapshot.id });
       files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
       setFiles([]);
       setLinks([]);
+      setLinkInput("");
       setThoughts("");
       setRejected([]);
     } catch (e) {
@@ -436,7 +445,7 @@ export function ConsumePage() {
           {error && <div className="banner error">{error}</div>}
           <div className="submit-row">
             <span className="muted small">
-              {files.length + links.length + (thoughts.trim() ? 1 : 0)} source(s) ready
+              {files.length + links.length + (thoughts.trim() ? 1 : 0) + (typedLink ? 1 : 0)} source(s) ready
             </span>
             <button type="button" className="btn primary big" disabled={!hasPerson || !hasInput || busy} onClick={submit}>
               <Icon name="sparkle" size={18} /> {busy ? "Uploading…" : "Consume with Gemini"}

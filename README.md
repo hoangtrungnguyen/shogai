@@ -91,8 +91,10 @@ related_webs: [https://…]                 # list of urls
 Edit them on the profile's *Details* card or by hand. They are filled automatically, never
 overwriting a value you set, from the person's own notes: note frontmatter (`fb:`, `linked:`, `web:`…),
 labelled lines (`Facebook: …`, `phone:: …`) and bare profile links. A bare link counts only when its handle
-matches the person's name; other links go to `related_webs`. Profiles created before these properties existed
-were upgraded once on startup (a backup of each is in `history/`).
+matches the person's name; other links go to `related_webs`. A Facebook, Instagram, LinkedIn or GitHub profile
+link added in the Consume page's *Links* box is that person's, whatever its handle, and fills the property even
+when Gemini can't open the page (Instagram shows it a login screen). Such links are read as web pages, not papers.
+Profiles created before these properties existed were upgraded once on startup (a backup of each is in `history/`).
 
 Every profile has a priority. A blank or invalid value reads as the default, 4, and the app writes 4 into a
 blank one when it saves the profile. On startup, profiles with a blank priority get 4 without changing their

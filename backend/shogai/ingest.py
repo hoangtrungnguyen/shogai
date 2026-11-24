@@ -14,7 +14,7 @@ from .analyzers import ANALYZERS, AnalysisResult, Analyzer, Item, SubjectContext
 from .config import Settings
 from .gemini import GeminiService, friendly_error
 from .jobs import Job
-from .properties import extract_from_note, merge_found
+from .properties import extract_from_note, merge_found, properties_from_links
 from .store import Store
 from .synthesis import Synthesizer, apply_update, synthesize_profile
 
@@ -87,9 +87,11 @@ def _require(requested: str | None, allowed: set[str], filename: str) -> None:
 
 
 _YOUTUBE_RE = re.compile(r"^(?:www\.|m\.|music\.)?(?:youtube\.com|youtu\.be)$", re.I)
+_SOCIAL_HOST_RE = re.compile(r"^(?:[\w-]+\.)*(?:facebook|instagram|linkedin|github)\.com$", re.I)
 
 
 def link_kind(url: str, requested: str | None = None) -> str:
+    """Analyzer for a link: YouTube is video, social profiles are web pages, anything else a paper."""
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise IngestError(f"Not a valid http(s) link: {url!r}")
@@ -101,7 +103,9 @@ def link_kind(url: str, requested: str | None = None) -> str:
         if requested == "video" and not youtube:
             raise IngestError("Only YouTube links can be analyzed as video. Download the video and upload it instead.")
         return requested
-    return "video" if youtube else "academic"
+    if youtube:
+        return "video"
+    return "text" if _SOCIAL_HOST_RE.match(parsed.hostname or "") else "academic"
 
 
 @dataclass
@@ -191,8 +195,19 @@ class IngestPipeline:
 
         await asyncio.gather(*(run_item(item) for item in req.items))
         ordered = [results[i.id] for i in req.items if i.id in results]
+        failed = [{"id": k, "message": v} for k, v in errors.items()]
+        # A profile link added for this person fills its property even when Gemini could not open the
+        # page: Instagram, and most Facebook and LinkedIn pages, only show it a login screen.
+        from_links = properties_from_links(i.url for i in req.items if i.url)
+        link_filled = self.store.fill_properties(slug, from_links) if from_links else []
+        link_changes = ["Filled properties from the links: " + ", ".join(link_filled)] if link_filled else []
         if not ordered:
-            raise RuntimeError("None of the sources could be analyzed. " + " | ".join(errors.values()))
+            if not link_filled:
+                raise RuntimeError("None of the sources could be analyzed. " + " | ".join(errors.values()))
+            await job.finish("done", {"type": "done", "result": {
+                "person": slug, "name": ctx.name, "sources": [], "changes": link_changes, "failed": failed,
+            }})
+            return
 
         await job.emit({"type": "stage", "stage": "saving", "message": "Saving source notes…"})
         docs = []
@@ -243,8 +258,8 @@ class IngestPipeline:
                 "person": slug,
                 "name": person.name,
                 "sources": [r.to_dict() for r, _ in docs],
-                "changes": update.changes,
-                "failed": [{"id": k, "message": v} for k, v in errors.items()],
+                "changes": update.changes + link_changes,
+                "failed": failed,
             },
         })
 

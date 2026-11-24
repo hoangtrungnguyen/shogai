@@ -70,7 +70,10 @@ export function linkKinds(url: string): { kind: SourceKind; options: SourceKind[
     const u = new URL(url);
     if (!/^https?:$/.test(u.protocol)) return null;
     const yt = /(^|\.)((youtube\.com)|(youtu\.be))$/i.test(u.hostname);
-    return yt ? { kind: "video", options: ["video", "text"] } : { kind: "academic", options: ["academic", "text"] };
+    if (yt) return { kind: "video", options: ["video", "text"] };
+    // Social profiles are web pages, not papers (the backend also saves them to the profile's details).
+    const social = /(^|\.)(facebook|instagram|linkedin|github)\.com$/i.test(u.hostname);
+    return social ? { kind: "text", options: ["text", "academic"] } : { kind: "academic", options: ["academic", "text"] };
   } catch {
     return null;
   }

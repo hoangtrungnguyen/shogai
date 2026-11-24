@@ -6,7 +6,15 @@ from fastapi.testclient import TestClient
 
 from shogai.main import create_app
 from shogai.advisor import Advisor
-from shogai.properties import DEFAULT_PRIORITY, PROPERTY_KEYS, coerce, extract_from_note, migrate_properties
+from shogai.ingest import link_kind
+from shogai.properties import (
+    DEFAULT_PRIORITY,
+    PROPERTY_KEYS,
+    coerce,
+    extract_from_note,
+    migrate_properties,
+    properties_from_links,
+)
 from shogai.store import StoreError, join_frontmatter, split_frontmatter
 
 NOTE = """---
@@ -46,6 +54,30 @@ def test_bare_profile_link_attributed_only_on_name_match():
     assert extract_from_note("https://www.instagram.com/moonlit_07/", ["Đặng Khánh Linh"]) == {
         "related_webs": ["https://www.instagram.com/moonlit_07"]}
     assert extract_from_note("two mails a@x.io b@y.io", ["X"]) == {}
+
+
+def test_profile_links_added_for_a_person_are_theirs():
+    found = properties_from_links([
+        "https://www.instagram.com/moonlit_07?igsh=MTFzd3B4a2E=",  # handle unlike the name: still theirs
+        "https://instagram.com/moonlit_07/",  # the same profile again
+        "https://m.facebook.com/khanhlinh.dang/",
+        "https://www.linkedin.com/in/klinh/?originalSubdomain=vn",
+        "https://github.com/klinh-dev",
+        "https://www.instagram.com/moonlit.art/",  # a second Instagram profile
+    ])
+    assert found == {
+        "instagram": "moonlit_07",
+        "facebook": "https://www.facebook.com/khanhlinh.dang",
+        "linkedin": "https://www.linkedin.com/in/klinh",
+        "github": "https://github.com/klinh-dev",
+        "related_webs": ["https://www.instagram.com/moonlit.art"],
+    }
+    # posts, repositories and share links may be someone else's; videos and papers aren't profiles
+    assert properties_from_links([
+        "https://www.instagram.com/p/C0ffee/", "https://www.instagram.com/someone/p/C0ffee/",
+        "https://github.com/facebook/react", "https://www.facebook.com/share/1AbCdEf/",
+        "https://www.youtube.com/watch?v=abc", "https://arxiv.org/abs/1234.5678",
+    ]) == {}
 
 
 def test_profile_frontmatter_has_all_properties_and_quotes_phone(store):
@@ -167,3 +199,42 @@ def test_properties_api_and_ingest_fill(client):
     assert props["email"] == "ana@lima.dev" and props["phone"] == "0912 345 678" and props["priority"] == 2
     r = client.patch("/api/people/ana-lima/properties", json={"priority": None})
     assert r.json()["properties"]["priority"] == 4
+
+
+def test_ingest_fills_properties_from_profile_links(client):
+    """A profile link added in the Consume page's Links box fills the property, whatever its handle."""
+    from test_api import wait_job
+
+    slug = client.post("/api/people", json={"name": "Đặng Khánh Linh"}).json()["slug"]
+    ig = "https://www.instagram.com/moonlit_07?igsh=MTFzd3B4a2E="
+    assert link_kind(ig) == "text"  # read as a web page, not a paper
+    job = client.post("/api/ingest", data={"person": slug, "links": json.dumps([{"url": ig, "kind": "text"}])}).json()
+    state = wait_job(client, job["id"])
+    assert state["status"] == "done", state
+    assert len(state["result"]["sources"]) == 1
+    assert "Filled properties from the links: instagram" in state["result"]["changes"]
+    assert client.get(f"/api/people/{slug}").json()["properties"]["instagram"] == "moonlit_07"
+
+
+def test_profile_link_fills_property_even_when_gemini_cannot_open_it(settings):
+    from test_api import fake_synth, wait_job
+
+    async def login_page(gem, settings, ctx, item, status):
+        raise RuntimeError("URL retrieval failed")
+
+    app = create_app(settings=settings, analyzers={"text": login_page}, synthesizer=fake_synth)
+    with TestClient(app) as client:
+        slug = client.post("/api/people", json={"name": "Đặng Khánh Linh"}).json()["slug"]
+
+        def consume(url):
+            job = client.post("/api/ingest", data={"person": slug, "links": json.dumps([{"url": url, "kind": "text"}])})
+            return wait_job(client, job.json()["id"])
+
+        state = consume("https://www.instagram.com/moonlit_07/")
+        assert state["status"] == "done", state
+        assert state["result"]["sources"] == [] and [f["id"] for f in state["result"]["failed"]] == ["i1"]
+        assert state["result"]["changes"] == ["Filled properties from the links: instagram"]
+        # a value already set is never overwritten; with nothing analyzed or filled, the job fails as before
+        state = consume("https://www.instagram.com/someone.else/")
+        assert state["status"] == "error" and "None of the sources could be analyzed" in state["error"]
+        assert client.get(f"/api/people/{slug}").json()["properties"]["instagram"] == "moonlit_07"

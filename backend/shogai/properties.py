@@ -12,14 +12,15 @@ default, 4.
 They can be filled from the user's own notes: Obsidian-style frontmatter (`fb:`, `linked:`, `web:` …),
 labelled lines (`Facebook: …`, `phone:: …`, `[Facebook](…)`) and bare profile links. A bare social
 link is only attributed to the person when its handle matches their name; otherwise it is kept in
-related_webs so nothing is lost or misattributed.
+related_webs so nothing is lost or misattributed. A profile link the user adds for a person on the
+Consume page is theirs whatever its handle.
 """
 
 from __future__ import annotations
 
 import re
 import unicodedata
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterable
 from urllib.parse import parse_qs, urlparse
 
 import yaml
@@ -292,6 +293,35 @@ def extract_from_note(text: str, names: list[str]) -> dict[str, Any]:
         related = [u for u in related if u not in known]
         if related:
             found["related_webs"] = related
+    return found
+
+
+def properties_from_links(urls: Iterable[str]) -> dict[str, Any]:
+    """Properties from the links the user added for a person on the Consume page.
+
+    Unlike a bare link in a note, a profile link added for this person is taken as theirs, whatever its
+    handle. Only the profile itself counts: a post, repository or share link may be someone else's.
+    A second profile on the same platform goes to related_webs."""
+    found: dict[str, Any] = {}
+    related: list[str] = []
+    for url in urls:
+        match = _SOCIAL_RE.match((url or "").strip())
+        if not match:
+            continue
+        platform = match.group(1).lower()
+        segs = [s for s in urlparse(match.group(0)).path.split("/") if s]
+        link = profile_link(platform, match.group(0)) if len(segs) == (2 if platform == "linkedin" else 1) else None
+        if not link:
+            continue
+        value = coerce(platform, link[0])
+        if platform not in found:
+            found[platform] = value
+        elif value != found[platform]:
+            web = f"https://www.instagram.com/{value}" if platform == "instagram" else value
+            if web not in related:
+                related.append(web)
+    if related:
+        found["related_webs"] = related
     return found
 
 
