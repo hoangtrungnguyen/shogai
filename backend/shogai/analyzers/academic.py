@@ -103,6 +103,10 @@ async def analyze_academic(
         model=settings.model_analyze,
         extra_meta={
             "paper_title": paper.paper_title,
+            "paper_authors": paper.authors,
+            "paper_year": paper.year,
+            "paper_venue": paper.venue,
+            "paper_identifier": paper.identifier or item.url,
             "subject_relation": paper.subject_relation,
             "fact_check": "ok" if fact else "failed",
             "verdicts": verdicts,

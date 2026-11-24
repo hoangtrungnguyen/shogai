@@ -14,6 +14,7 @@ from .analyzers import ANALYZERS, AnalysisResult, Analyzer, Item, SubjectContext
 from .config import Settings
 from .gemini import GeminiService, friendly_error
 from .jobs import Job
+from .properties import extract_from_note, merge_found
 from .store import Store
 from .synthesis import Synthesizer, apply_update, synthesize_profile
 
@@ -221,6 +222,15 @@ class IngestPipeline:
             try:
                 update = await self.synthesizer(self.gem, self.settings, person, docs)
                 person = apply_update(self.store, person, update, avatar)
+                # Contact details / priority written in the notes themselves fill empty properties.
+                found: dict = {}
+                names = [person.name, slug, *person.aliases]
+                for result in ordered:
+                    if result.item.text:
+                        merge_found(found, extract_from_note(result.item.text, names))
+                filled = self.store.fill_properties(slug, found) if found else []
+                if filled:
+                    update.changes.append("Filled properties from the notes: " + ", ".join(filled))
             except Exception as exc:  # noqa: BLE001
                 raise RuntimeError(
                     f"Sources were saved ({', '.join(r.id for r, _ in docs)}), but merging them into the profile "

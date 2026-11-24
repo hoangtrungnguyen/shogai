@@ -28,12 +28,16 @@ from typing import Any
 
 import yaml
 
+from .properties import PROPERTY_KEYS, coerce, coerce_properties, default_properties, is_empty
+
 PROFILE_FILE = "profile.md"
 SOURCES_DIR = "sources"
 MEDIA_DIR = "media"
 HISTORY_DIR = "history"
 HISTORY_KEEP = 20
 SOURCE_LOG_HEADING = "## Source Log"
+FRONTMATTER_ORDER = ["name", "relationship", *PROPERTY_KEYS, "aliases", "tags", "summary", "avatar",
+                     "created", "updated", "sources"]
 
 KIND_ICONS = {
     "image": "🖼",
@@ -126,15 +130,37 @@ def _represent_list(dumper: yaml.SafeDumper, data: list) -> yaml.Node:
 
 
 _FrontmatterDumper.add_representer(list, _represent_list)
+_NUMBER_LIKE_RE = re.compile(r"[-+]?(?:0[xob][0-9a-f]+|[0-9][0-9_]*(?:\.[0-9]*)?|\.[0-9]+)(?:e[-+]?[0-9]+)?", re.I)
+
+
+def _represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.Node:
+    # Quote strings such as phone numbers ("0965…") that YAML 1.2 readers (Obsidian) would turn into numbers.
+    if _NUMBER_LIKE_RE.fullmatch(data):
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="'")
+    return dumper.represent_str(data)
+
+
+_FrontmatterDumper.add_representer(str, _represent_str)
+# Empty properties are written as `key:` (blank) so Obsidian shows them as empty fields.
+_FrontmatterDumper.add_representer(type(None), lambda d, _v: d.represent_scalar("tag:yaml.org,2002:null", ""))
 
 
 def join_frontmatter(meta: dict[str, Any], body: str) -> str:
-    clean = {k: v for k, v in meta.items() if v is not None}
+    clean = {k: v for k, v in meta.items() if v is not None or k in PROPERTY_KEYS}
     front = yaml.dump(
         clean, Dumper=_FrontmatterDumper, allow_unicode=True, sort_keys=False,
         default_flow_style=False, width=10_000,
     ).strip()
     return f"---\n{front}\n---\n\n{(body or '').strip()}\n"
+
+
+def order_profile_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    """Canonical key order for profile frontmatter; every property key is present."""
+    for key, value in default_properties().items():
+        meta.setdefault(key, value)
+    ordered = {k: meta[k] for k in FRONTMATTER_ORDER if k in meta}
+    ordered.update({k: v for k, v in meta.items() if k not in ordered})
+    return ordered
 
 
 def strip_source_log(body: str) -> str:
@@ -214,6 +240,7 @@ class Person:
     created: str = ""
     updated: str = ""
     source_count: int = 0
+    properties: dict[str, Any] = field(default_factory=default_properties)
     body: str = ""
     raw: str = ""
 
@@ -229,6 +256,7 @@ class Person:
             "created": self.created,
             "updated": self.updated,
             "source_count": self.source_count,
+            "properties": self.properties,
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -294,6 +322,7 @@ class Store:
             created=str(meta.get("created") or ""),
             updated=str(meta.get("updated") or ""),
             source_count=len(self._source_files(slug)),
+            properties=coerce_properties(meta),
             body=strip_source_log(body).strip(),
             raw=raw,
         )
@@ -322,6 +351,7 @@ class Store:
                 "relationship": (relationship or "").strip(),
                 "aliases": _dedupe(aliases or []),
                 "tags": _dedupe(tags or []),
+                **default_properties(),
                 "summary": "",
                 "avatar": None,
                 "created": stamp,
@@ -332,7 +362,8 @@ class Store:
                 f"# {name}\n\n> _Nothing recorded yet. Feed Shōgai photos, personal notes, videos "
                 f"or papers about {name} to build this profile._"
             )
-            atomic_write(pdir / PROFILE_FILE, join_frontmatter(meta, body + "\n\n" + self._render_source_log(slug)))
+            atomic_write(pdir / PROFILE_FILE,
+                         join_frontmatter(order_profile_meta(meta), body + "\n\n" + self._render_source_log(slug)))
         return self.get(slug)
 
     def save_profile(
@@ -342,6 +373,7 @@ class Store:
         body: str | None = None,
         meta_updates: dict[str, Any] | None = None,
         backup: bool = True,
+        touch: bool = True,
     ) -> Person:
         with self.lock(slug):
             path = self._require(slug)
@@ -351,10 +383,12 @@ class Store:
                 self._backup(slug, raw)
             for key, value in (meta_updates or {}).items():
                 meta[key] = value
-            meta["updated"] = now_iso()
+            if touch or not meta.get("updated"):
+                meta["updated"] = now_iso()
             meta["sources"] = len(self._source_files(slug))
             new_body = strip_source_log(body if body is not None else old_body)
-            atomic_write(path, join_frontmatter(meta, new_body + "\n\n" + self._render_source_log(slug)))
+            atomic_write(path, join_frontmatter(order_profile_meta(meta),
+                                                new_body + "\n\n" + self._render_source_log(slug)))
         return self.get(slug)
 
     def write_raw(self, slug: str, text: str) -> Person:
@@ -371,11 +405,47 @@ class Store:
             self._backup(slug, path.read_text(encoding="utf-8"))
             meta["updated"] = now_iso()
             meta["sources"] = len(self._source_files(slug))
+            for key, value in default_properties().items():  # keep every property present
+                meta.setdefault(key, value)
             atomic_write(
                 path,
                 join_frontmatter(meta, strip_source_log(body) + "\n\n" + self._render_source_log(slug)),
             )
         return self.get(slug)
+
+    def update_properties(self, slug: str, updates: dict[str, Any]) -> Person:
+        """Set properties (validated/normalized); unknown keys are rejected."""
+        unknown = set(updates) - set(PROPERTY_KEYS)
+        if unknown:
+            raise StoreError(f"Unknown properties: {', '.join(sorted(unknown))}")
+        return self.save_profile(slug, meta_updates={k: coerce(k, v) for k, v in updates.items()})
+
+    def fill_properties(self, slug: str, found: dict[str, Any]) -> list[str]:
+        """Fill only properties that are still empty (never overwrite the user's values).
+        related_webs is merged. Returns the keys that changed."""
+        with self.lock(slug):
+            current = self.get(slug).properties
+            updates: dict[str, Any] = {}
+            for key, value in found.items():
+                value = coerce(key, value)
+                if key == "related_webs":
+                    merged = current["related_webs"] + [u for u in value if u not in current["related_webs"]]
+                    if merged != current["related_webs"]:
+                        updates[key] = merged
+                elif is_empty(key, current.get(key)) and not is_empty(key, value):
+                    updates[key] = value
+            if updates:
+                self.save_profile(slug, meta_updates=updates)
+            return list(updates)
+
+    def ensure_properties(self, slug: str) -> bool:
+        """Add any missing property keys to profile.md. Returns True if the file changed."""
+        with self.lock(slug):
+            meta, _ = split_frontmatter(self._require(slug).read_text(encoding="utf-8"))
+            if all(k in meta for k in PROPERTY_KEYS):
+                return False
+            self.save_profile(slug)
+            return True
 
     def delete(self, slug: str) -> Path:
         with self.lock(slug):

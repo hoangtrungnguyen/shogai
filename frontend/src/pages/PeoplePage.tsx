@@ -61,12 +61,26 @@ export function PeoplePage() {
   const { people, loading, error } = usePeople();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
+  const [followOnly, setFollowOnly] = useState(false);
+  const [sort, setSort] = useState<"name" | "priority" | "updated">("name");
   const needle = query.trim().toLowerCase();
-  const shown = needle
-    ? people.filter((p) =>
+  const followCount = people.filter((p) => p.properties.follow_up).length;
+  const shown = people
+    .filter((p) => !followOnly || p.properties.follow_up)
+    .filter(
+      (p) =>
+        !needle ||
         [p.name, p.relationship, p.summary, ...p.aliases, ...p.tags].join(" ").toLowerCase().includes(needle),
-      )
-    : people;
+    )
+    .sort((a, b) => {
+      if (sort === "updated") return b.updated.localeCompare(a.updated);
+      if (sort === "priority") {
+        const pa = a.properties.priority ?? Infinity;
+        const pb = b.properties.priority ?? Infinity;
+        if (pa !== pb) return pa - pb;
+      }
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <div className="page">
@@ -90,6 +104,27 @@ export function PeoplePage() {
         </div>
       </header>
 
+      {people.length > 0 && (
+        <div className="people-tools">
+          <button
+            type="button"
+            className={`follow ${followOnly ? "on" : ""}`}
+            onClick={() => setFollowOnly((v) => !v)}
+            title="Show only people marked follow_up"
+          >
+            <Icon name="flag" size={14} /> Follow up <span>{followCount}</span>
+          </button>
+          <label className="sort">
+            Sort
+            <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+              <option value="name">Name</option>
+              <option value="priority">Priority (lowest number first)</option>
+              <option value="updated">Recently updated</option>
+            </select>
+          </label>
+        </div>
+      )}
+
       {adding && <NewPersonForm onClose={() => setAdding(false)} />}
       {error && <div className="banner error">Could not reach the backend: {error}</div>}
 
@@ -112,9 +147,17 @@ export function PeoplePage() {
           <Link key={p.slug} to={`/people/${encodeURIComponent(p.slug)}`} className="person-card card">
             <div className="person-card-top">
               <Avatar person={p} size={52} />
-              <div className="min0">
+              <div className="min0 grow">
                 <h3 className="truncate">{p.name}</h3>
                 <p className="muted truncate">{p.relationship || "relationship not set"}</p>
+              </div>
+              <div className="card-badges">
+                {p.properties.priority != null && <span className="prio">P{p.properties.priority}</span>}
+                {p.properties.follow_up && (
+                  <span className="follow on" title="Follow up">
+                    <Icon name="flag" size={13} />
+                  </span>
+                )}
               </div>
             </div>
             <p className="person-summary">{p.summary || "No profile yet — add some information."}</p>
@@ -136,7 +179,7 @@ export function PeoplePage() {
           </Link>
         ))}
       </div>
-      {needle && !shown.length && <p className="muted center">No one matches “{query}”.</p>}
+      {(needle || followOnly) && !shown.length && <p className="muted center">No one matches these filters.</p>}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import type {
   ChatEvent,
   Health,
+  LibraryData,
+  PersonProperties,
   JobSnapshot,
   MediaFile,
   Person,
@@ -46,6 +48,8 @@ export const api = {
   createPerson: (body: { name: string; relationship?: string; aliases?: string[]; tags?: string[] }) =>
     request<Person>("/api/people", json("POST", body)),
   savePerson: (slug: string, markdown: string) => request<Person>(p(slug), json("PUT", { markdown })),
+  updateProperties: (slug: string, props: Partial<PersonProperties>) =>
+    request<Person>(`${p(slug)}/properties`, json("PATCH", props)),
   deletePerson: (slug: string) => request<{ deleted: string }>(p(slug), { method: "DELETE" }),
   rebuild: (slug: string) => request<JobSnapshot>(`${p(slug)}/rebuild`, { method: "POST" }),
   sources: (slug: string) => request<SourceRecord[]>(`${p(slug)}/sources`),
@@ -55,6 +59,9 @@ export const api = {
   media: (slug: string) => request<MediaFile[]>(`${p(slug)}/media`),
   jobs: () => request<JobSnapshot[]>("/api/jobs"),
   job: (id: string) => request<JobSnapshot>(`/api/jobs/${id}`),
+  library: () => request<LibraryData>("/api/library"),
+  scanLibrary: (force = false) =>
+    request<JobSnapshot>(`/api/library/scan${force ? "?force=true" : ""}`, { method: "POST" }),
 };
 
 export interface IngestFile {

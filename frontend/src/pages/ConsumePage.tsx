@@ -123,7 +123,7 @@ export function ConsumePage() {
   const effectiveMode = mode ?? (people.length ? "existing" : "new");
   const jobId = params.get("job");
   const job = jobs.find((j) => j.id === jobId);
-  const recent = jobs.filter((j) => j.id !== jobId).slice(0, 3);
+  const recent = jobs.filter((j) => j.id !== jobId && j.kind !== "library").slice(0, 3);
 
   useEffect(() => {
     const p = params.get("person");

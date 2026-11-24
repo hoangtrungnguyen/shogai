@@ -43,6 +43,16 @@ source-cited Markdown profile per person. Then ask the advisor anything about th
   the source behind a citation.
 - Conversations are kept in your browser (localStorage) under *History*.
 
+**Academic resources** (`/resources`)
+- Lists the papers, books, textbooks, courses and reports **mentioned in your notes** — nothing else.
+  *Scan notes* has Gemini read your original text notes (imported `.md`/`.txt` files and typed
+  thoughts) in batches. Every entry must quote its note word for word; the backend checks each quote
+  against the note and drops anything it cannot find, so suggested or invented works never appear.
+- Each entry shows who it relates to, the exact line, and a link to the note. Titles completed from a
+  partial mention (e.g. "80-20" → *The 80/20 Principle*) are marked "details completed by Gemini".
+- Papers you consumed are listed with their fact-check verdicts. Scans are cached per note, so only
+  new or edited notes are sent to Gemini.
+
 **Profiles** (`/people/<slug>`): rendered profile with clickable citations → source drill-down,
 media gallery, raw Markdown editor, *Rebuild profile* (re-merge all sources), delete (moves to `data/.trash`).
 
@@ -55,10 +65,34 @@ data/people/linh-tran/
     s001-text-university-friend-notes.md
     s002-image-birthday-card-for-linh.md
     s003-academic-shared-novel-activities….md   # includes the fact-check table + web sources
-  media/                # original uploads (SHOGAI_KEEP_MEDIA=true)
+  media/                # original uploads and typed thoughts (SHOGAI_KEEP_MEDIA=true)
   history/              # last 20 versions of profile.md (written before every change)
+data/library/
+  resources.md          # academic resources mentioned in the notes (regenerated on every scan)
+  .index.json           # per-note scan cache (content hash → mentions)
 data/.trash/            # deleted people / sources
 ```
+
+Every `profile.md` frontmatter carries these properties (Obsidian shows them as typed fields):
+
+```yaml
+priority: 1              # number (1 = highest, as in the imported notes)
+follow_up: true          # boolean
+phone: '0912345678'      # string (quoted so it stays text)
+email: name@example.com  # string
+linkedin: https://www.linkedin.com/in/…   # url
+facebook: https://www.facebook.com/…      # url
+instagram: handle                         # name, without @
+github: https://github.com/…              # url
+blog: https://…                           # url
+related_webs: [https://…]                 # list of urls
+```
+
+Edit them on the profile's *Details* card or by hand. They are filled automatically, never
+overwriting a value you set, from the person's own notes: note frontmatter (`fb:`, `linked:`, `web:`…),
+labelled lines (`Facebook: …`, `phone:: …`) and bare profile links. A bare link counts only when its handle
+matches the person's name; other links go to `related_webs`. Profiles created before these properties existed
+were upgraded once on startup (a backup of each is in `history/`).
 
 Plain Markdown with relative links — the `data/` folder opens fine in Obsidian or any editor.
 Hand edits are welcome (keep `name` in the frontmatter); the `## Source Log` section is regenerated.
@@ -109,11 +143,14 @@ cd backend && uv run pytest
 |---|---|
 | `GET /api/health` | config + Gemini status |
 | `GET/POST /api/people` | list / create (`{name, relationship}`) |
+| `PATCH /api/people/{slug}/properties` | update priority, follow_up, contacts (validated) |
 | `GET/PUT/DELETE /api/people/{slug}` | read / replace raw Markdown / move to trash |
 | `POST /api/people/{slug}/rebuild` | re-merge all sources (background job) |
 | `GET /api/people/{slug}/sources[/{sN}]`, `DELETE …/{sN}` | source notes |
 | `GET /api/people/{slug}/media[/{file}]` | original uploads |
 | `POST /api/ingest` | multipart: `person`, `thoughts`, `files[]`, `manifest` (JSON `[{kind, note}]`), `links` (JSON `[{url, kind, note}]`) → job |
+| `GET /api/library` | academic resources + scan status |
+| `POST /api/library/scan[?force=true]` | scan new/edited notes (or all) for resources → job |
 | `GET /api/jobs/{id}/events` | job progress as Server-Sent Events (replayable, `Last-Event-ID`) |
 | `POST /api/chat` | `{messages, focus}` → SSE stream of `text` / `tool` / `done` / `error` events |
 
