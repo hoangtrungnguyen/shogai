@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api";
 import type { Person, PersonProperties } from "../types";
+import { DEFAULT_PRIORITY } from "../util";
 import { Icon } from "./Icon";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -28,7 +29,7 @@ interface Draft {
 }
 
 const toDraft = (p: PersonProperties): Draft => ({
-  priority: p.priority == null ? "" : String(p.priority),
+  priority: String(p.priority),
   follow_up: p.follow_up,
   phone: p.phone ?? "",
   email: p.email ?? "",
@@ -76,14 +77,14 @@ export function PropertiesCard({ person, onSaved }: { person: Person; onSaved: (
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const priority = draft.priority.trim();
-    if (priority && Number.isNaN(Number(priority))) {
-      setError("Priority must be a number.");
+    const priority = draft.priority.trim() ? Number(draft.priority) : DEFAULT_PRIORITY; // blank = the default
+    if (!Number.isInteger(priority) || priority < 1) {
+      setError("Priority must be a whole number from 1 (the highest).");
       return;
     }
     const text = (v: string) => v.trim() || null;
     void save({
-      priority: priority ? Number(priority) : null,
+      priority,
       follow_up: draft.follow_up,
       phone: text(draft.phone),
       email: text(draft.email),
@@ -115,12 +116,14 @@ export function PropertiesCard({ person, onSaved }: { person: Person; onSaved: (
       <form className="card props-card editing" onSubmit={submit}>
         <div className="props-grid">
           <label className="field">
-            <span>Priority</span>
+            <span>Priority (1 = highest)</span>
             <input
-              inputMode="decimal"
+              type="number"
+              min={1}
+              step={1}
               value={draft.priority}
               onChange={(e) => setDraft({ ...draft, priority: e.target.value })}
-              placeholder="e.g. 1"
+              placeholder={`${DEFAULT_PRIORITY} (default)`}
             />
           </label>
           <label className="field check">
@@ -168,8 +171,8 @@ export function PropertiesCard({ person, onSaved }: { person: Person; onSaved: (
   return (
     <section className="card props-card">
       <div className="props-row">
-        <span className={`prio ${p.priority == null ? "unset" : ""}`} title="priority">
-          {p.priority == null ? "No priority" : `Priority ${p.priority}`}
+        <span className={`prio${p.priority >= DEFAULT_PRIORITY ? " low" : ""}`} title="Priority: 1 is the highest">
+          Priority {p.priority}
         </span>
         <button
           type="button"

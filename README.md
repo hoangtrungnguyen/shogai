@@ -76,7 +76,7 @@ data/.trash/            # deleted people / sources
 Every `profile.md` frontmatter carries these properties (Obsidian shows them as typed fields):
 
 ```yaml
-priority: 1              # number (1 = highest, as in the imported notes)
+priority: 1              # whole number: 1 = highest, 4 = default
 follow_up: true          # boolean
 phone: '0912345678'      # string (quoted so it stays text)
 email: name@example.com  # string
@@ -93,6 +93,10 @@ overwriting a value you set, from the person's own notes: note frontmatter (`fb:
 labelled lines (`Facebook: …`, `phone:: …`) and bare profile links. A bare link counts only when its handle
 matches the person's name; other links go to `related_webs`. Profiles created before these properties existed
 were upgraded once on startup (a backup of each is in `history/`).
+
+Every profile has a priority. A blank or invalid value reads as the default, 4, and the app writes 4 into a
+blank one when it saves the profile. On startup, profiles with a blank priority get 4 without changing their
+`updated` date. A priority found in the notes replaces a 4, never any other level.
 
 Plain Markdown with relative links — the `data/` folder opens fine in Obsidian or any editor.
 Hand edits are welcome (keep `name` in the frontmatter); the `## Source Log` section is regenerated.
@@ -171,7 +175,7 @@ time. The running version shows in the sidebar footer (hover it for commit and b
 |---|---|
 | `GET /api/health` | version + build stamp, config, Gemini status |
 | `GET/POST /api/people` | list / create (`{name, relationship}`) |
-| `PATCH /api/people/{slug}/properties` | update priority, follow_up, contacts (validated) |
+| `PATCH /api/people/{slug}/properties` | update priority (whole number ≥ 1; `null` resets it to 4), follow_up, contacts (validated) |
 | `GET/PUT/DELETE /api/people/{slug}` | read / replace raw Markdown / move to trash |
 | `POST /api/people/{slug}/rebuild` | re-merge all sources (background job) |
 | `GET /api/people/{slug}/sources[/{sN}]`, `DELETE …/{sN}` | source notes |

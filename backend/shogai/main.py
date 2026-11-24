@@ -50,7 +50,7 @@ class RawUpdate(BaseModel):
 
 class PropertiesPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    priority: float | None = None
+    priority: int | None = Field(default=None, ge=1)  # 1 = highest; null resets to the default (4)
     follow_up: bool | None = None
     phone: str | None = None
     email: str | None = None
@@ -83,7 +83,7 @@ def create_app(
     migrated = migrate_properties(store)
     if migrated["upgraded"]:
         logging.getLogger("shogai").warning(
-            "Added profile properties to %d profile(s); %d value(s) filled from their notes.",
+            "Upgraded the properties of %d profile(s); %d value(s) filled from their notes.",
             migrated["upgraded"], migrated["filled"],
         )
     gem = gemini or GeminiService(settings)

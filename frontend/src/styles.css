@@ -2190,7 +2190,7 @@ h4 {
   white-space: nowrap;
 }
 
-.prio.unset {
+.prio.low {
   background: var(--paper-deep);
   color: var(--muted);
   font-weight: 500;

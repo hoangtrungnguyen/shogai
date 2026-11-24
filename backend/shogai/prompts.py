@@ -204,6 +204,8 @@ recommend appropriate professional help.
 Today's date: {today}.
 
 PEOPLE IN THE KNOWLEDGE BASE ({count}):
+Tags: [priority N] is how high the user ranks the relationship, 1 = highest (no tag means the default, \
+{default_priority}); [follow up] means the user wants to follow up with them.
 {index}
 {focus}"""
 
