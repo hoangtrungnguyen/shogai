@@ -26,7 +26,7 @@ from .gemini import GeminiService, friendly_error
 from .jobs import Job
 from .prompts import LIBRARY_SYSTEM, LIBRARY_TASK
 from .schemas import FoundResource, LibraryExtraction
-from .store import NotFound, Store, StoreError, atomic_write, join_frontmatter, now_iso, split_frontmatter
+from .store import NotFound, Person, Store, StoreError, atomic_write, join_frontmatter, now_iso, split_frontmatter
 
 LIBRARY_DIR = "library"
 INDEX_FILE = ".index.json"
@@ -98,6 +98,29 @@ class Note:
     sha: str
 
 
+def person_notes(store: Store, person: Person) -> list[Note]:
+    """One person's original text notes: text-file originals attached to their sources."""
+    out: list[Note] = []
+    for record in store.list_sources(person.slug):
+        if not record.media or os.path.splitext(record.media)[1].lower() not in TEXT_NOTE_EXT:
+            continue
+        try:
+            path = store.media_file(person.slug, record.media.split("/", 1)[-1])
+        except NotFound:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        out.append(Note(
+            key=f"people/{person.slug}/{record.media}",
+            slug=person.slug,
+            name=person.name,
+            source_id=record.id,
+            source_file=record.filename,
+            text=text,
+            sha=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        ))
+    return out
+
+
 class Library:
     def __init__(self, store: Store, gem: GeminiService, settings: Settings):
         self.store = store
@@ -109,26 +132,7 @@ class Library:
     # ------------------------------------------------------------------ inputs
     def notes(self) -> list[Note]:
         """The user's original text notes: text-file originals attached to sources."""
-        out: list[Note] = []
-        for person in self.store.list_people():
-            for record in self.store.list_sources(person.slug):
-                if not record.media or os.path.splitext(record.media)[1].lower() not in TEXT_NOTE_EXT:
-                    continue
-                try:
-                    path = self.store.media_file(person.slug, record.media.split("/", 1)[-1])
-                except NotFound:
-                    continue
-                text = path.read_text(encoding="utf-8", errors="replace")
-                out.append(Note(
-                    key=f"people/{person.slug}/{record.media}",
-                    slug=person.slug,
-                    name=person.name,
-                    source_id=record.id,
-                    source_file=record.filename,
-                    text=text,
-                    sha=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                ))
-        return out
+        return [note for person in self.store.list_people() for note in person_notes(self.store, person)]
 
     def papers(self) -> list[dict[str, Any]]:
         """Academic sources the user consumed (PDFs / paper links)."""

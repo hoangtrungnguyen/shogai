@@ -1,9 +1,11 @@
 import type {
   ChatEvent,
+  GraphData,
   Health,
   LibraryData,
   PersonProperties,
   JobSnapshot,
+  LinkResult,
   MediaFile,
   Person,
   PersonSummary,
@@ -58,6 +60,8 @@ export const api = {
     request<{ deleted: string }>(`${p(slug)}/sources/${encodeURIComponent(id)}`, { method: "DELETE" }),
   media: (slug: string) => request<MediaFile[]>(`${p(slug)}/media`),
   jobs: () => request<JobSnapshot[]>("/api/jobs"),
+  graph: () => request<GraphData>("/api/graph"),
+  linkPeople: () => request<LinkResult>("/api/graph/link", { method: "POST" }),
   job: (id: string) => request<JobSnapshot>(`/api/jobs/${id}`),
   library: () => request<LibraryData>("/api/library"),
   scanLibrary: (force = false) =>

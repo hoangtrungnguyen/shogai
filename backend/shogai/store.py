@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 import yaml
 
@@ -36,6 +37,7 @@ MEDIA_DIR = "media"
 HISTORY_DIR = "history"
 HISTORY_KEEP = 20
 SOURCE_LOG_HEADING = "## Source Log"
+REFERENCES_HEADING = "## References"
 FRONTMATTER_ORDER = ["name", "relationship", *PROPERTY_KEYS, "aliases", "tags", "summary", "avatar",
                      "created", "updated", "sources"]
 
@@ -51,6 +53,14 @@ _SLUG_RE = re.compile(r"^[\w][\w-]{0,79}$", re.UNICODE)
 _SOURCE_ID_RE = re.compile(r"^s(\d{1,6})$")
 _FRONTMATTER_RE = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)(.*)\Z", re.S)
 _SOURCE_LOG_RE = re.compile(r"^##\s+Source Log\s*$", re.M | re.I)
+_REFERENCES_RE = re.compile(r"^##[ \t]+References[ \t]*$", re.M | re.I)
+_TOP_HEADING_RE = re.compile(r"^#{1,2}[ \t]+\S", re.M)
+_REF_MDLINK_RE = re.compile(r"\[([^\]]*)\]\(<?([^)>\s]+)>?[^)]*\)")
+_REF_WIKI_RE = re.compile(r"\[\[([^\]|#]+)[^\]]*\]\]")
+_REF_PROFILE_RE = re.compile(r"(?:^|/)([\w-]+)/profile(?:\.md)?$")  # ../<slug>/profile.md
+_REF_ROUTE_RE = re.compile(r"^/people/([^/?#]+)/?$")  # a link copied from the app
+_REF_BULLET_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.+)$")
+_REF_NAME_END_RE = re.compile(r"\s+[—–-]\s|\s*[(:,;]")
 
 
 class StoreError(Exception):
@@ -170,6 +180,71 @@ def strip_source_log(body: str) -> str:
     return (body or "").rstrip()
 
 
+def split_references(body: str) -> tuple[str, str | None]:
+    """Split off the '## References' section: (the rest of the body, the section's text or None).
+
+    The section runs to the next top-level heading, so hand-written sections after it are kept.
+    """
+    text = body or ""
+    match = _REFERENCES_RE.search(text)
+    if not match:
+        return text.rstrip(), None
+    following = _TOP_HEADING_RE.search(text, match.end())
+    end = following.start() if following else len(text)
+    rest = text[: match.start()].rstrip()
+    if following:
+        rest = (rest + "\n\n" + text[end:].strip()).strip()
+    return rest, text[match.end(): end].strip()
+
+
+def place_references(rest: str, section: str | None) -> str:
+    """Put the References section at the end of the body (just before the Source Log)."""
+    rest = (rest or "").rstrip()
+    if section is None:
+        return rest
+    block = f"{REFERENCES_HEADING}\n\n{section.strip()}" if section.strip() else REFERENCES_HEADING
+    return f"{rest}\n\n{block}" if rest else block
+
+
+def reference_link(slug: str, name: str) -> str:
+    """One References line: a relative link that also works when the folder is opened in Obsidian."""
+    label = " ".join(name.replace("[", "(").replace("]", ")").split())
+    return f"- [{label}](../{slug}/profile.md)"
+
+
+def reference_targets(section: str | None) -> list[str]:
+    """What each line of a References section points at.
+
+    Links to a profile (``../slug/profile.md``, ``/people/slug``, ``[[slug/profile]]``) give the
+    slug; wiki links (``[[Name]]``) and plain bullets (``- Name — note``) give the name, which the
+    graph resolves against people's names and aliases. Links to web pages are ignored.
+    """
+    out: list[str] = []
+    for line in (section or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        linked = False
+        for m in _REF_MDLINK_RE.finditer(line):
+            linked = True
+            href = unquote(m.group(2))
+            hit = _REF_ROUTE_RE.match(href) or _REF_PROFILE_RE.search(href.removesuffix("/"))
+            if hit:
+                out.append(hit.group(1))
+        for m in _REF_WIKI_RE.finditer(line):
+            linked = True
+            parts = [x.strip() for x in m.group(1).strip().removesuffix(".md").split("/") if x.strip()]
+            if parts:
+                out.append(parts[-2] if len(parts) > 1 and parts[-1].lower() == "profile" else parts[-1])
+        if not linked:
+            bullet = _REF_BULLET_RE.match(line)
+            if bullet:
+                name = _REF_NAME_END_RE.split(bullet.group(1).replace("*", "").replace("_", " "), maxsplit=1)[0]
+                if name.strip():
+                    out.append(" ".join(name.split()))
+    return _dedupe(out)
+
+
 def atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex[:8]}.tmp")
@@ -240,6 +315,7 @@ class Person:
     updated: str = ""
     source_count: int = 0
     properties: dict[str, Any] = field(default_factory=default_properties)
+    references: list[str] = field(default_factory=list)  # targets listed under '## References'
     body: str = ""
     raw: str = ""
 
@@ -310,6 +386,7 @@ class Store:
         path = self._require(slug)
         raw = path.read_text(encoding="utf-8")
         meta, body = split_frontmatter(raw)
+        body = strip_source_log(body).strip()
         return Person(
             slug=slug,
             name=str(meta.get("name") or slug),
@@ -322,7 +399,8 @@ class Store:
             updated=str(meta.get("updated") or ""),
             source_count=len(self._source_files(slug)),
             properties=coerce_properties(meta),
-            body=strip_source_log(body).strip(),
+            references=reference_targets(split_references(body)[1]),
+            body=body,
             raw=raw,
         )
 
@@ -385,7 +463,12 @@ class Store:
             if touch or not meta.get("updated"):
                 meta["updated"] = now_iso()
             meta["sources"] = len(self._source_files(slug))
-            new_body = strip_source_log(body if body is not None else old_body)
+            rest, references = split_references(strip_source_log(old_body))
+            if body is not None:
+                new_rest, new_references = split_references(strip_source_log(body))
+                # A new body without a References section (e.g. from the synthesizer) keeps the links.
+                rest, references = new_rest, references if new_references is None else new_references
+            new_body = place_references(rest, references)
             atomic_write(path, join_frontmatter(order_profile_meta(meta),
                                                 new_body + "\n\n" + self._render_source_log(slug)))
         return self.get(slug)
@@ -405,10 +488,8 @@ class Store:
             meta["updated"] = now_iso()
             meta["sources"] = len(self._source_files(slug))
             apply_defaults(meta)  # keep every property present
-            atomic_write(
-                path,
-                join_frontmatter(meta, strip_source_log(body) + "\n\n" + self._render_source_log(slug)),
-            )
+            body = place_references(*split_references(strip_source_log(body)))
+            atomic_write(path, join_frontmatter(meta, body + "\n\n" + self._render_source_log(slug)))
         return self.get(slug)
 
     def update_properties(self, slug: str, updates: dict[str, Any]) -> Person:
@@ -444,6 +525,27 @@ class Store:
                 return False
             self.save_profile(slug)
             return True
+
+    def add_references(self, slug: str, links: list[tuple[str, str]]) -> list[str]:
+        """Append (slug, name) links to the person's References section; return the slugs added.
+
+        Slugs already listed are skipped. Adding links doesn't count as an edit of the profile.
+        """
+        with self.lock(slug):
+            person = self.get(slug)
+            rest, section = split_references(person.body)
+            listed = set(person.references)
+            new: list[tuple[str, str]] = []
+            for target, name in links:
+                if target != slug and target not in listed and self.exists(target):
+                    listed.add(target)
+                    new.append((target, name))
+            if not new:
+                return []
+            lines = [section] if section else []
+            lines += [reference_link(target, name) for target, name in new]
+            self.save_profile(slug, body=place_references(rest, "\n".join(lines)), touch=False)
+        return [target for target, _ in new]
 
     def delete(self, slug: str) -> Path:
         with self.lock(slug):

@@ -138,7 +138,7 @@ in a source; keep it factual and brief.
 - Academic sources: summarise the paper in one line, the fact-check verdicts, and how cautiously it \
 applies to {name}. Never present population-level findings as facts about {name}.
 - Keep sections that the user wrote by hand, even if they are not in the template.
-- Do NOT include YAML frontmatter or a "Source Log" section — the app manages those.
+- Do NOT include YAML frontmatter, a "References" section or a "Source Log" section — the app manages those.
 - Write in {language}.
 
 Structure (omit sections without content, except the title and portrait):

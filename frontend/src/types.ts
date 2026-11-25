@@ -27,6 +27,28 @@ export interface PersonSummary {
   properties: PersonProperties;
 }
 
+/** A link between two people: `source` lists `target` in the References section of their profile. */
+export interface GraphEdge {
+  source: string;
+  target: string;
+  /** Both profiles list each other. */
+  mutual: boolean;
+}
+
+export interface GraphData {
+  edges: GraphEdge[];
+  /** References entries that match no one in the circle. */
+  unresolved: { person: string; target: string }[];
+}
+
+export interface LinkResult {
+  scanned: number;
+  profiles: number;
+  links: number;
+  added: Record<string, string[]>;
+  graph: GraphData;
+}
+
 export interface Person extends PersonSummary {
   body: string;
   raw: string;

@@ -254,9 +254,45 @@ h4 {
   color: var(--shu);
 }
 
-.side-people {
+.circle-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--card);
+  color: var(--ink-soft);
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.circle-btn .count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.circle-btn:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.circle-btn.active {
+  border-color: color-mix(in srgb, var(--shu) 40%, var(--line));
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.circle-btn .icon,
+.circle-btn.active .icon {
+  color: var(--shu);
+}
+
+.side-spacer {
   flex: 1;
-  min-height: 0;
 }
 
 .side-head {
@@ -276,49 +312,6 @@ h4 {
   border-radius: 99px;
   padding: 0 7px;
   letter-spacing: 0;
-}
-
-.side-filter {
-  width: 100%;
-  margin: 0 0 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-  font-size: 13px;
-}
-
-.side-people ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.side-people li a {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 5px 10px;
-  border-radius: 8px;
-  color: var(--ink-soft);
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.side-people li a:hover {
-  background: var(--paper-deep);
-}
-
-.side-people li a.active {
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-
-.side-empty {
-  padding: 4px 10px;
-  color: var(--muted);
-  font-size: 13px;
 }
 
 .jobs-tray {
@@ -1958,7 +1951,7 @@ h4 {
   }
 
   .brand-text small,
-  .side-people,
+  .side-spacer,
   .jobs-tray,
   .side-foot {
     display: none;
@@ -2305,4 +2298,373 @@ h4 {
 .card-badges .follow {
   padding: 3px 7px;
   cursor: default;
+}
+
+/* ------------------------------------------------------------------ circle */
+
+.page.circle {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  padding-bottom: 24px;
+}
+
+.page.circle .page-head {
+  margin-bottom: 16px;
+}
+
+.graph-search {
+  position: relative;
+}
+
+.graph-search .search input {
+  width: 200px;
+}
+
+.graph-matches {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 260px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  box-shadow: var(--shadow-lift);
+}
+
+.graph-matches button,
+.graph-links button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.graph-matches button:hover,
+.graph-links button:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.graph-matches .truncate,
+.graph-links .truncate {
+  flex: 1;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input {
+  accent-color: var(--shu);
+}
+
+.graph-notice {
+  margin: 0 0 12px;
+  color: var(--matcha);
+  font-size: 14px;
+}
+
+.graph-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 380px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--line-strong) 55%, transparent) 1px, transparent 0) 0 0 / 22px 22px,
+    var(--card);
+}
+
+.graph {
+  position: absolute;
+  inset: 0;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.graph.panning {
+  cursor: grabbing;
+}
+
+.graph .edge {
+  stroke: color-mix(in srgb, var(--ink-soft) 38%, transparent);
+  stroke-width: 1.4;
+  transition: opacity 0.15s;
+}
+
+.graph .edge.mutual {
+  stroke: var(--ink-soft);
+  stroke-opacity: 0.55;
+  stroke-width: 2.2;
+}
+
+.graph .edge.lit {
+  stroke: var(--shu);
+  stroke-opacity: 1;
+  stroke-width: 2.4;
+}
+
+.graph .edge.dim {
+  opacity: 0.25;
+}
+
+#graph-arrow path {
+  fill: color-mix(in srgb, var(--ink-soft) 50%, transparent);
+}
+
+#graph-arrow-lit path {
+  fill: var(--shu);
+}
+
+.graph .node {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.graph .node.dim {
+  opacity: 0.28;
+}
+
+.graph .node .halo {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 3;
+}
+
+.graph .node:hover .halo {
+  stroke: color-mix(in srgb, var(--shu) 35%, transparent);
+}
+
+.graph .node.selected .halo {
+  stroke: var(--shu);
+}
+
+.graph .node .ring {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+.graph .node.prio .ring {
+  stroke: var(--shu) !important;
+  stroke-width: 3;
+}
+
+.graph .node.lonely {
+  opacity: 0.8;
+}
+
+.graph .node .initials {
+  font-family: var(--serif);
+  font-weight: 700;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.graph .node .label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--ink);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--card);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.graph .follow-dot {
+  fill: var(--kincha);
+  stroke: var(--card);
+  stroke-width: 2;
+}
+
+.graph-card {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 270px;
+  max-height: calc(100% - 28px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  box-shadow: var(--shadow-lift);
+}
+
+.graph-card-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.graph-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 22px;
+}
+
+.graph-card-head > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-card p {
+  margin: 0;
+}
+
+.graph-links {
+  flex: 1;
+  min-height: 0;
+  margin: 0 -8px;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.graph-links .dir {
+  width: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.graph-card .btn {
+  align-self: flex-start;
+}
+
+.graph-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 420px;
+  padding: 22px 24px;
+  text-align: center;
+  box-shadow: var(--shadow-lift);
+}
+
+.graph-empty h3 {
+  margin: 0 0 8px;
+}
+
+.graph-empty p {
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.graph-legend {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  max-width: calc(100% - 140px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+.graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lg-line {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 1.5px solid color-mix(in srgb, var(--ink-soft) 38%, transparent);
+}
+
+.lg-line.mutual {
+  border-top: 2.5px solid color-mix(in srgb, var(--ink-soft) 55%, transparent);
+}
+
+.lg-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.lg-dot.prio {
+  border: 2.5px solid var(--shu);
+}
+
+.lg-dot.follow {
+  background: var(--kincha);
+}
+
+.lg-warn {
+  color: var(--kincha);
+  cursor: help;
+}
+
+.graph-zoom {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 860px) {
+  .circle-btn {
+    padding: 7px 12px;
+    white-space: nowrap;
+  }
+
+  .circle-btn .count {
+    display: none;
+  }
+
+  .graph-search .search input {
+    width: 140px;
+  }
+
+  .graph-card {
+    top: auto;
+    bottom: 56px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 45%;
+  }
+
+  .graph-legend {
+    display: none;
+  }
 }

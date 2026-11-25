@@ -261,6 +261,9 @@ export function PersonPage() {
           <Link className="btn" to={`/advisor?focus=${encodeURIComponent(slug)}`}>
             <Icon name="chat" size={16} /> Ask advisor
           </Link>
+          <Link className="btn" to={`/circle?focus=${encodeURIComponent(slug)}`}>
+            <Icon name="graph" size={16} /> Show in circle
+          </Link>
           <div className="row gap-s">
             <button type="button" className="icon-btn" title="Rebuild profile from all sources" onClick={rebuild} disabled={!sources.length || !!running}>
               <Icon name="refresh" size={16} />

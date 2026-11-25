@@ -4,6 +4,7 @@ source file per input, then merge everything into the person's profile.md."""
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 from dataclasses import dataclass, field
@@ -13,10 +14,13 @@ from urllib.parse import urlparse
 from .analyzers import ANALYZERS, AnalysisResult, Analyzer, Item, SubjectContext
 from .config import Settings
 from .gemini import GeminiService, friendly_error
+from .graph import link_people
 from .jobs import Job
 from .properties import extract_from_note, merge_found, properties_from_links
 from .store import Store
 from .synthesis import Synthesizer, apply_update, synthesize_profile
+
+log = logging.getLogger("shogai")
 
 IMAGE_TYPES = {
     ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
@@ -246,6 +250,7 @@ class IngestPipeline:
                 filled = self.store.fill_properties(slug, found) if found else []
                 if filled:
                     update.changes.append("Filled properties from the notes: " + ", ".join(filled))
+                update.changes += self._link_changes(slug)
             except Exception as exc:  # noqa: BLE001
                 raise RuntimeError(
                     f"Sources were saved ({', '.join(r.id for r, _ in docs)}), but merging them into the profile "
@@ -263,6 +268,18 @@ class IngestPipeline:
             },
         })
 
+    def _link_changes(self, slug: str) -> list[str]:
+        """Link the person to the people their notes and profile name (their References section)."""
+        try:
+            added = link_people(self.store, [slug])["added"].get(slug, [])
+        except Exception:  # noqa: BLE001 — linking is a bonus; never fail the merge over it
+            log.exception("Could not link %s to other people", slug)
+            return []
+        if not added:
+            return []
+        names = [self.store.get(s).name for s in added]
+        return ["Linked to " + ", ".join(names) + " (References)"]
+
     async def rebuild(self, job: Job, slug: str) -> None:
         """Re-merge every saved source into the profile (recovery / refresh)."""
         try:
@@ -277,6 +294,7 @@ class IngestPipeline:
                 person = self.store.get(slug)
                 update = await self.synthesizer(self.gem, self.settings, person, docs)
                 person = apply_update(self.store, person, update)
+                update.changes += self._link_changes(slug)
             await job.finish("done", {"type": "done", "result": {
                 "person": slug, "name": person.name, "sources": [], "changes": update.changes, "failed": [],
             }})

@@ -53,6 +53,17 @@ source-cited Markdown profile per person. Then ask the advisor anything about th
 - Papers you consumed are listed with their fact-check verdicts. Scans are cached per note, so only
   new or edited notes are sent to Gemini.
 
+**Your circle** (`/circle`, the sidebar button)
+- A graph of the people in your circle. Two people are linked when one profile lists the other under
+  `## References`. Drag to pan, scroll to zoom, drag people around; hover to light up someone's links, click for
+  a card with their links, double-click to open the profile. People without links are hidden until you tick
+  *Show unlinked*.
+- *Find links in notes* adds links the notes already make: Obsidian wiki links (`[[Name]]`) in a person's notes
+  and other people's full names written in their profile. A one-word name only counts when no one else's name
+  has that word, and a name inside a longer capitalised name ("Vạn Xuân" for "Xuân") is skipped. It also runs
+  after every consume and rebuild. Links are only ever added: delete a line to remove one (a later scan re-adds
+  it if the notes still mention that person).
+
 **Profiles** (`/people/<slug>`): rendered profile with clickable citations → source drill-down,
 media gallery, raw Markdown editor, *Rebuild profile* (re-merge all sources), delete (moves to `data/.trash`).
 
@@ -99,6 +110,18 @@ Profiles created before these properties existed were upgraded once on startup (
 Every profile has a priority. A blank or invalid value reads as the default, 4, and the app writes 4 into a
 blank one when it saves the profile. On startup, profiles with a blank priority get 4 without changing their
 `updated` date. A priority found in the notes replaces a 4, never any other level.
+
+Links to other people live in a `## References` section at the end of the profile, one per line:
+
+```markdown
+## References
+
+- [Trương Bảo Ngọc](../truong-bao-ngoc/profile.md)   # written by Shōgai; opens in Obsidian too
+- [[Trương Bảo Ngọc]]                                # a wiki link to a name, alias or slug also works
+- Trương Bảo Ngọc — cousin                           # so does a plain name
+```
+
+Gemini never sees or rewrites this section, so rebuilding a profile keeps its links.
 
 Plain Markdown with relative links — the `data/` folder opens fine in Obsidian or any editor.
 Hand edits are welcome (keep `name` in the frontmatter); the `## Source Log` section is regenerated.
@@ -212,6 +235,8 @@ time. The running version shows in the sidebar footer (hover it for commit and b
 | `GET /api/people/{slug}/sources[/{sN}]`, `DELETE …/{sN}` | source notes |
 | `GET /api/people/{slug}/media[/{file}]` | original uploads |
 | `POST /api/ingest` | multipart: `person`, `thoughts`, `files[]`, `manifest` (JSON `[{kind, note}]`), `links` (JSON `[{url, kind, note}]`) → job |
+| `GET /api/graph` | links between people from their References sections (+ entries that match no one) |
+| `POST /api/graph/link` | add the links found in notes and profiles to References sections; returns the new graph |
 | `GET /api/library` | academic resources + scan status |
 | `POST /api/library/scan[?force=true]` | scan new/edited notes (or all) for resources → job |
 | `GET /api/jobs/{id}/events` | job progress as Server-Sent Events (replayable, `Last-Event-ID`) |

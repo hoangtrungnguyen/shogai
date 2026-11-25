@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
+import { Link } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 import { mediaUrl } from "../api";
 import type { SourceRecord } from "../types";
@@ -12,6 +13,9 @@ interface Props {
   onCite?: (sourceId: string) => void;
   className?: string;
 }
+
+// A link to another person's profile (References section): ../<slug>/profile.md or /people/<slug>.
+const PROFILE_LINK_RE = /^(?:\.\.\/([^/?#]+)\/profile(?:\.md)?|\/people\/([^/?#]+)\/?)$/;
 
 // [s3] or [s1, s4] -> one link per id, rendered as citation chips.
 const CITE_RE = /\[\s*(s\d+(?:\s*[,;]\s*s\d+)*)\s*\]/gi;
@@ -55,6 +59,11 @@ export function Markdown({ text, slug, sources, onCite, className }: Props) {
               {children}
             </button>
           );
+        }
+        const profile = href ? PROFILE_LINK_RE.exec(href) : null;
+        if (profile) {
+          const target = decodeURIComponent(profile[1] ?? profile[2]);
+          return <Link to={`/people/${encodeURIComponent(target)}`}>{children}</Link>;
         }
         const external = !!href && /^https?:/i.test(href);
         return (
