@@ -8,7 +8,8 @@
 #   ./scripts/docker.sh logs -f        anything else goes to `docker compose` (ps, down, build, …)
 #
 # Environment: SHOGAI_DATA_PATH (data folder, default ./data), SHOGAI_BACKUP_PATH (default ./backups),
-# SHOGAI_BACKUP_KEEP (newest backups kept, default 20; 0 keeps all), SHOGAI_PORT (default 8000).
+# SHOGAI_BACKUP_KEEP (newest backups kept, default 20; 0 keeps all), SHOGAI_PORT (default 8000),
+# SHOGAI_PUBLIC_PORT (the public page, default 8001).
 # Run an older image: SHOGAI_VERSION=0.1.0 docker compose up -d --no-build
 set -euo pipefail
 CALLER_DIR="$PWD"
@@ -136,6 +137,7 @@ deploy() {
     exit 1
   fi
   echo "Shōgai $VERSION ($SHOGAI_COMMIT) → http://127.0.0.1:${SHOGAI_PORT:-8000}"
+  echo "Public page → http://127.0.0.1:${SHOGAI_PUBLIC_PORT:-8001}"
 }
 
 backup_now() {

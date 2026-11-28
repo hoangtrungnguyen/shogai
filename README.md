@@ -24,6 +24,10 @@ source-cited Markdown profile per person. Then ask the advisor anything about th
 **Consume Info** (`/consume`)
 - Pick a person (or create one), then add any mix of: personal thoughts, image files, videos, audio,
   PDFs / text files, and links (YouTube, arXiv / DOI / PDF URLs, web pages). Paste screenshots with ⌘V.
+- Voice memos: *Record a memo* records you in the browser (pause, resume, listen back before you consume it);
+  *Upload a recording* adds a voice message or call recording (m4a, mp3, wav, ogg, opus, webm…). Gemini takes the
+  voice in a memo recorded here as yours, telling what you know, so your words and tone are not filed as the
+  person's. Browsers only allow the microphone on `localhost` or `https`.
 - Each input is routed to its Gemini processor (up to 3 in parallel):
 
   | Source | Processor | What Gemini does |
@@ -64,6 +68,32 @@ source-cited Markdown profile per person. Then ask the advisor anything about th
   after every consume and rebuild. Links are only ever added: delete a line to remove one (a later scan re-adds
   it if the notes still mention that person).
 
+**About me** (`/me`): your public notes
+- A folder of Markdown about **you** (`data/public/`). Write it on the *About me* page or in any editor. In
+  `about.md`, the frontmatter `name` and `headline` introduce you. Everything in the folder is public, except files
+  and folders whose name starts with a dot and files with `draft: true` in their frontmatter.
+- People read the notes on your public page and AI agents through a JSON API and `/llms.txt`. The page has a port of
+  its own, **8001**, and is read-only: it serves `data/public/` and nothing else. Port 8000 has no login and holds your
+  whole circle, so 8001 is the only port you may expose, e.g. `cloudflared tunnel --url http://127.0.0.1:8001`; then set
+  `SHOGAI_PUBLIC_URL` to the address you get.
+
+**Requests** (`/requests`): questions from people you gave a key
+- Questions reach you through a **Shōgai Relay** ([relay/](relay/README.md)): a small server you run, or one run by
+  someone you trust, with its own Dockerfile and docker-compose. Only people who hold one of your keys can ask you
+  anything there, and only whoever sent a question can read your answer: they need the key and the question's own
+  token. Nothing on your computer is exposed: this app fetches the questions and sends your replies back.
+- On the *Requests* page, connect to the relay (its address and sign-up code), then make a key per person or group
+  (**New key**) and send them **Copy link**: it opens the relay with the key filled in. Revoke a key to cut its holders
+  off; the relay then deletes their questions. *Disconnect* deletes your account on the relay.
+- The app syncs every minute (`SHOGAI_RELAY_POLL`) and right after you reply: it sends your name and headline, fetches
+  new questions into `data/requests/`, and sends your replies, declines and deletions. A reply written while the relay is
+  unreachable waits for the next sync.
+- Nothing is answered automatically. Each question shows the key it came with (and your label for it); the sidebar
+  shows how many wait. *Draft from my public notes* has Gemini draft a reply from your public notes only, leaving `[…]`
+  gaps for what they don't say; you edit it before sending. *Also add to faq.md* publishes the question and your reply.
+- When a sender's typed name matches someone in your circle, the question shows that person, marked *not verified*:
+  the key tells you more about who sent it.
+
 **Profiles** (`/people/<slug>`): rendered profile with clickable citations → source drill-down,
 media gallery, raw Markdown editor, *Rebuild profile* (re-merge all sources), delete (moves to `data/.trash`).
 
@@ -81,6 +111,10 @@ data/people/linh-tran/
 data/library/
   resources.md          # academic resources mentioned in the notes (regenerated on every scan)
   .index.json           # per-note scan cache (content hash → mentions)
+data/public/            # Markdown about you, for anyone to read (SHOGAI_PUBLIC_DIR)
+  about.md              # frontmatter `name` + `headline` introduce you on the public page
+data/requests/          # one .md per question fetched from your relay (private)
+data/relay.json         # your relay's address, this app's account token there, and your keys (readable by you only)
 data/.trash/            # deleted people / sources
 ```
 
@@ -163,8 +197,8 @@ folder (`./data`), so Docker and the scripts above share the same database. Need
 ./scripts/docker.sh down
 ```
 
-- The port is published on `127.0.0.1` only. Stop `./scripts/start.sh` first, or pick another port:
-  `SHOGAI_PORT=8080 ./scripts/docker.sh`.
+- The ports are published on `127.0.0.1` only: 8000 for the app, 8001 for the public page. Stop
+  `./scripts/start.sh` first, or pick other ports: `SHOGAI_PORT=8080 SHOGAI_PUBLIC_PORT=8081 ./scripts/docker.sh`.
 - On Linux, the data folder must be writable by uid 1000 (or set `user:` in `docker-compose.yml`).
 
 ### Deploys keep your data
@@ -222,6 +256,11 @@ time. The running version shows in the sidebar footer (hover it for commit and b
 | `SHOGAI_KEEP_MEDIA` | `true` | Keep original uploads next to the profile |
 | `SHOGAI_GEMINI_API_VERSION` | `v1beta` | Gemini API version (keys in the `AQ.` format need `v1beta`) |
 | `SHOGAI_SHUTDOWN_GRACE` | `240` | Seconds running jobs get to finish when the server stops (deploy, Ctrl-C); keep it under Docker's 5-minute stop timeout |
+| `SHOGAI_PUBLIC_DIR` | `data/public` | Your public notes (relative to the repo root) |
+| `SHOGAI_PUBLIC_HOST` | `127.0.0.1` | Where the public page listens (Docker sets `0.0.0.0` inside the container) |
+| `SHOGAI_PUBLIC_PORT` | `8001` | Port of the public page; `0` turns it off |
+| `SHOGAI_PUBLIC_URL` | — | The address visitors use (your tunnel or proxy), shown on the *About me* page |
+| `SHOGAI_RELAY_POLL` | `60` | Seconds between syncs with your Shōgai Relay; `0` syncs only when you press *Sync now* |
 
 ## API
 
@@ -241,11 +280,40 @@ time. The running version shows in the sidebar footer (hover it for commit and b
 | `POST /api/library/scan[?force=true]` | scan new/edited notes (or all) for resources → job |
 | `GET /api/jobs/{id}/events` | job progress as Server-Sent Events (replayable, `Last-Event-ID`) |
 | `POST /api/chat` | `{messages, focus}` → SSE stream of `text` / `tool` / `done` / `error` events |
+| `GET /api/me` | your public notes (drafts included), name and headline, the public page's address and state |
+| `GET/PUT/DELETE /api/me/files/{path}` | read / create or replace (`{markdown}`) / move to trash |
+| `GET /api/requests[?status=pending\|replied\|declined]` | requests sent to you, newest first, with counts |
+| `GET /api/requests/counts` | how many are pending / replied / declined (the sidebar badge) |
+| `POST /api/requests/{id}/reply` | `{message, publish?}`; `publish` appends the question and reply to `faq.md` |
+| `POST /api/requests/{id}/decline` | `{message?}` |
+| `POST /api/requests/{id}/draft` | `{instructions?}` → a Gemini draft from your public notes (nothing is sent) |
+| `DELETE /api/requests/{id}` | move to trash (and delete it on the relay) |
+| `GET /api/relay` | the relay you're connected to, your keys, the last sync and its error |
+| `POST /api/relay/connect` | `{server, code}`: open an account on a relay |
+| `POST /api/relay/disconnect` | delete that account (its keys and questions) and forget the relay |
+| `POST /api/relay/keys` | `{label}` → a new key; the relay gets only its hash |
+| `DELETE /api/relay/keys/{id}` | revoke a key |
+| `POST /api/relay/sync` | sync now |
+
+The public page (port 8001) serves the visitor page at `/`, `/llms.txt`, `/docs` and these read-only routes only
+(port 8000 has them too, for the preview at `/ask.html`):
+
+| Method & path | |
+|---|---|
+| `GET /api/public[?full=true]` | your name and headline, the list of public notes (with their text) |
+| `GET /api/public/files/{path}` | one note |
+| `GET /api/public/all` | every public note in one Markdown document (also `/llms.txt`, with how to use the API) |
+| `GET /api/public/search?q=` | keyword search in the public notes |
+
+The relay's own API is in [relay/README.md](relay/README.md).
 
 ## Privacy
 
-Everything is stored locally in `data/`. The server listens on `127.0.0.1` only (in Docker, the published port is
-bound to `127.0.0.1`). Content you consume is
+Everything is stored locally in `data/`. The server listens on `127.0.0.1` only (in Docker, the published ports are
+bound to `127.0.0.1`). The public page (port 8001) serves `data/public/` only, read-only; nothing in your circle is
+reachable from it, and it never calls Gemini. Questions and your replies to them pass through your Shōgai Relay, whose
+operator can read them; the relay never sees your circle, your other notes or the labels of your keys. Drafting a
+reply sends your public notes and the question to Gemini. Content you consume is
 sent to the Gemini API for analysis (uploaded video/audio/PDF files are deleted from Gemini right after
 analysis; they would otherwise expire after 48 h). The analyzers are instructed not to infer sensitive
 traits (health, religion, sexuality, politics…) from appearance and not to identify people by their face.

@@ -29,6 +29,24 @@ export function usePeople(): PeopleCtx {
   return ctx;
 }
 
+/* ------------------------------------------------------------------- inbox */
+
+interface InboxCtx {
+  /** Requests from the public page still waiting for your reply. */
+  pending: number;
+  refresh: () => Promise<void>;
+}
+
+const InboxContext = createContext<InboxCtx | null>(null);
+
+export function useInbox(): InboxCtx {
+  const ctx = useContext(InboxContext);
+  if (!ctx) throw new Error("useInbox outside provider");
+  return ctx;
+}
+
+const INBOX_POLL_MS = 30_000;
+
 /* -------------------------------------------------------------------- jobs */
 
 export interface TrackedItem {
@@ -136,6 +154,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     api.health().then(setHealth).catch(() => setHealth(undefined));
   }, [refresh]);
 
+  const [pending, setPending] = useState(0);
+  const refreshInbox = useCallback(async () => {
+    try {
+      setPending((await api.requestCounts()).pending);
+    } catch {
+      /* backend offline: keep the last count */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshInbox();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshInbox();
+    }, INBOX_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [refreshInbox]);
+
   const [jobs, setJobs] = useState<TrackedJob[]>([]);
   const streams = useRef(new Map<string, EventSource>());
 
@@ -207,10 +242,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const peopleValue = useMemo(() => ({ people, loading, error, health, refresh }), [people, loading, error, health, refresh]);
   const jobsValue = useMemo(() => ({ jobs, track, dismiss }), [jobs, track, dismiss]);
+  const inboxValue = useMemo(() => ({ pending, refresh: refreshInbox }), [pending, refreshInbox]);
 
   return (
     <PeopleContext.Provider value={peopleValue}>
-      <JobsContext.Provider value={jobsValue}>{children}</JobsContext.Provider>
+      <JobsContext.Provider value={jobsValue}>
+        <InboxContext.Provider value={inboxValue}>{children}</InboxContext.Provider>
+      </JobsContext.Provider>
     </PeopleContext.Provider>
   );
 }

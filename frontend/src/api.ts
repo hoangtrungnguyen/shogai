@@ -2,13 +2,23 @@ import type {
   ChatEvent,
   GraphData,
   Health,
+  InfoRequest,
   LibraryData,
+  MeInfo,
   PersonProperties,
   JobSnapshot,
   LinkResult,
   MediaFile,
   Person,
   PersonSummary,
+  PublicFileDetail,
+  PublicInfo,
+  RelayInfo,
+  RelayKey,
+  RelaySyncResult,
+  RequestCounts,
+  RequestList,
+  RequestStatus,
   SourceDetail,
   SourceKind,
   SourceRecord,
@@ -42,6 +52,9 @@ const json = (method: string, body: unknown): RequestInit => ({
 });
 
 const p = (slug: string) => `/api/people/${encodeURIComponent(slug)}`;
+/** A file in the public folder: each path segment encoded, the slashes kept. */
+const pf = (path: string) => path.split("/").map(encodeURIComponent).join("/");
+const r = (id: string) => `/api/requests/${encodeURIComponent(id)}`;
 
 export const api = {
   health: () => request<Health>("/api/health"),
@@ -66,12 +79,44 @@ export const api = {
   library: () => request<LibraryData>("/api/library"),
   scanLibrary: (force = false) =>
     request<JobSnapshot>(`/api/library/scan${force ? "?force=true" : ""}`, { method: "POST" }),
+  me: () => request<MeInfo>("/api/me"),
+  meFile: (path: string) => request<PublicFileDetail>(`/api/me/files/${pf(path)}`),
+  saveMeFile: (path: string, markdown: string) =>
+    request<PublicFileDetail>(`/api/me/files/${pf(path)}`, json("PUT", { markdown })),
+  deleteMeFile: (path: string) => request<{ deleted: string }>(`/api/me/files/${pf(path)}`, { method: "DELETE" }),
+  requests: (status?: RequestStatus) => request<RequestList>(`/api/requests${status ? `?status=${status}` : ""}`),
+  requestCounts: () => request<RequestCounts>("/api/requests/counts"),
+  reply: (id: string, message: string, publish: boolean) =>
+    request<InfoRequest & { published: string | null; relay_error: string | null }>(
+      `${r(id)}/reply`,
+      json("POST", { message, publish }),
+    ),
+  decline: (id: string, message: string) =>
+    request<InfoRequest & { relay_error: string | null }>(`${r(id)}/decline`, json("POST", { message })),
+  draftReply: (id: string, instructions: string) =>
+    request<{ draft: string }>(`${r(id)}/draft`, json("POST", { instructions })),
+  deleteRequest: (id: string) => request<{ deleted: string }>(r(id), { method: "DELETE" }),
+  relay: () => request<RelayInfo>("/api/relay"),
+  relayConnect: (server: string, code: string) =>
+    request<RelaySyncResult>("/api/relay/connect", json("POST", { server, code })),
+  relayDisconnect: () => request<RelayInfo & { warning: string | null }>("/api/relay/disconnect", { method: "POST" }),
+  relayCreateKey: (label: string) =>
+    request<{ key: RelayKey; relay: RelayInfo }>("/api/relay/keys", json("POST", { label })),
+  relayRevokeKey: (id: string) => request<RelayInfo>(`/api/relay/keys/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  relaySync: () => request<RelaySyncResult>("/api/relay/sync", { method: "POST" }),
+};
+
+/** What the public page uses: the same routes the public listener serves (read-only). */
+export const publicApi = {
+  info: () => request<PublicInfo>("/api/public?full=true"),
 };
 
 export interface IngestFile {
   file: File;
   kind: SourceKind;
   note: string;
+  /** A voice memo recorded on the Consume page: Gemini takes the voice as the user's. */
+  recorded?: boolean;
 }
 
 export interface IngestLink {
@@ -84,7 +129,10 @@ export function ingest(person: string, thoughts: string, files: IngestFile[], li
   const form = new FormData();
   form.append("person", person);
   form.append("thoughts", thoughts);
-  form.append("manifest", JSON.stringify(files.map((f) => ({ kind: f.kind, note: f.note }))));
+  form.append(
+    "manifest",
+    JSON.stringify(files.map((f) => ({ kind: f.kind, note: f.note, ...(f.recorded ? { recorded: true } : {}) }))),
+  );
   form.append("links", JSON.stringify(links));
   for (const f of files) form.append("files", f.file, f.file.name);
   return request<JobSnapshot>("/api/ingest", { method: "POST", body: form });

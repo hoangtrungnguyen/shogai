@@ -202,3 +202,117 @@ export interface LibraryData {
   status: LibraryStatus;
   resources: LibraryResource[];
 }
+
+/* ------------------------------------------------------------ about me (public) */
+
+export interface PublicOwner {
+  /** From the frontmatter of about.md. */
+  name: string | null;
+  headline: string | null;
+}
+
+export interface PublicFileSummary {
+  /** Relative to the public folder, e.g. "about.md" or "work/projects.md". */
+  path: string;
+  title: string;
+  updated: string;
+  size: number;
+  /** `draft: true` in the frontmatter: not public. */
+  draft: boolean;
+}
+
+export interface PublicFileDetail extends PublicFileSummary {
+  meta: Record<string, unknown>;
+  body: string;
+  /** The whole file (owner API only). */
+  raw?: string;
+}
+
+export interface PublicInfo {
+  owner: PublicOwner;
+  files: PublicFileDetail[];
+  /** The owner's Shōgai Relay: with a key from them, ask them there. */
+  relay: string | null;
+}
+
+export interface PublicListener {
+  enabled: boolean;
+  running: boolean;
+  /** Where the public listener answers on this machine, e.g. http://127.0.0.1:8001. */
+  local_url: string | null;
+  /** SHOGAI_PUBLIC_URL: the address visitors use (a tunnel or proxy), if set. */
+  url: string | null;
+  error: string | null;
+}
+
+export interface MeInfo {
+  owner: PublicOwner;
+  folder: string;
+  files: PublicFileSummary[];
+  public: PublicListener;
+}
+
+export type RequestStatus = "pending" | "replied" | "declined";
+
+export interface InfoRequest {
+  id: string;
+  status: RequestStatus;
+  /** As the sender typed it (not verified). */
+  name: string;
+  question: string;
+  /** Your reply, or the message sent with a decline. */
+  reply: string;
+  created: string;
+  updated: string;
+  answered: string | null;
+  /** The request on the relay. */
+  relay_id: string;
+  /** The key it was sent with, and the label you gave that key. */
+  key_id: string;
+  key_label: string | null;
+  /** The relay has your latest reply (false: it is sent at the next sync). */
+  synced: boolean;
+  /** Deleted on the relay (its key was revoked): a reply can't reach the sender. */
+  relay_gone: boolean;
+  /** Someone in your circle with the same name. Not proof: anyone can type a name. */
+  match: { slug: string; name: string; relationship: string; avatar: string | null } | null;
+}
+
+export interface RequestCounts {
+  pending: number;
+  replied: number;
+  declined: number;
+  all: number;
+}
+
+export interface RequestList {
+  counts: RequestCounts;
+  requests: InfoRequest[];
+}
+
+/** A key you hand out: whoever has it can ask you things on your relay. */
+export interface RelayKey {
+  id: string;
+  /** Whom you gave it to; stays in this app. */
+  label: string;
+  key: string;
+  created: string;
+}
+
+export interface RelayInfo {
+  connected: boolean;
+  /** Where this app reaches the relay. */
+  server: string | null;
+  /** The relay's address for people (key links). */
+  share_url: string | null;
+  /** Plain http to a machine other than this one: keys travel unencrypted. */
+  insecure: boolean;
+  keys: RelayKey[];
+  last_sync: string | null;
+  error: string | null;
+}
+
+export interface RelaySyncResult extends RelayInfo {
+  added: number;
+  sent: number;
+}

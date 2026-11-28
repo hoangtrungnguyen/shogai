@@ -1,0 +1,44 @@
+# Shōgai Relay in Docker.
+#
+#   docker compose up -d --build                    the relay on http://127.0.0.1:8090 (this machine only)
+#   docker compose --profile https up -d --build    + Caddy with automatic HTTPS for RELAY_DOMAIN (ports 80, 443)
+#
+# Settings go in .env next to this file (copy .env.example). Keys and account tokens travel with every request,
+# so put the relay behind HTTPS before anyone uses it over the internet.
+name: shogai-relay
+
+services:
+  relay:
+    build: .
+    image: shogai-relay:latest
+    environment:
+      SHOGAI_RELAY_DATA_DIR: /data
+      # When set, a Shōgai app needs this code to open an account on the relay.
+      SHOGAI_RELAY_SIGNUP_CODE: ${SHOGAI_RELAY_SIGNUP_CODE:-}
+    ports:
+      # This machine only. To serve the internet, use the https profile (or your own reverse proxy) instead of
+      # opening this port: the relay trusts the client address its proxy forwards.
+      - "127.0.0.1:${RELAY_PORT:-8090}:8000"
+    volumes:
+      # The SQLite database (requests, key hashes). On Linux the folder must be writable by uid 1000.
+      - ./data:/data
+    init: true
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    command: caddy reverse-proxy --from ${RELAY_DOMAIN:-localhost} --to relay:8000
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data # certificates
+      - caddy-config:/config
+    depends_on:
+      - relay
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

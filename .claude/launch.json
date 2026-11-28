@@ -12,6 +12,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "relay",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "--project", "relay", "shogai-relay"],
+      "port": 8090
+    },
+    {
+      "name": "backend-beside-docker",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["SHOGAI_RELAY_POLL=0", "SHOGAI_PUBLIC_PORT=0", "uv", "run", "--project", "backend", "uvicorn", "shogai.main:app", "--app-dir", "backend", "--reload", "--reload-dir", "backend/shogai", "--port", "8000"],
+      "port": 8000
     }
   ]
 }

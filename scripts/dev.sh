@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hot-reloading dev mode: API on :8000, Vite UI on :5173 (proxies /api).
+# Hot-reloading dev mode: API on :8000, Vite UI on :5173 (proxies /api), public page on :8001.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

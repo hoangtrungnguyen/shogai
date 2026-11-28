@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Single-server mode: build the UI once, then FastAPI serves UI + API on :8000.
+# Single-server mode: build the UI once, then FastAPI serves UI + API on :8000 (public page on :8001).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

@@ -34,8 +34,11 @@ VIDEO_TYPES = {
 AUDIO_TYPES = {
     ".mp3": "audio/mp3", ".wav": "audio/wav", ".m4a": "audio/mp4", ".aac": "audio/aac",
     ".ogg": "audio/ogg", ".oga": "audio/ogg", ".opus": "audio/ogg", ".flac": "audio/flac",
-    ".aif": "audio/aiff", ".aiff": "audio/aiff",
+    ".aif": "audio/aiff", ".aiff": "audio/aiff", ".weba": "audio/webm",
 }
+# Video containers that may hold sound only. Browsers record voice memos as .webm (MediaRecorder), and
+# a dropped .webm reads as video unless the user, or the recorder's audio/webm type, says it is audio.
+AUDIO_IN_VIDEO_TYPES = {".webm": "audio/webm"}
 DOCUMENT_TYPES = {".pdf": "application/pdf"}
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".log", ".html", ".htm", ".xml",
@@ -67,6 +70,8 @@ def detect_kind(filename: str, content_type: str | None = None, requested: str |
     if ext in IMAGE_TYPES or (not ext and ctype in IMAGE_TYPES.values()):
         _require(requested, {"image"}, filename)
         return FileKind("image", IMAGE_TYPES.get(ext, ctype))
+    if ext in AUDIO_IN_VIDEO_TYPES and (requested == "audio" or (not requested and ctype.startswith("audio/"))):
+        return FileKind("audio", AUDIO_IN_VIDEO_TYPES[ext])
     if ext in VIDEO_TYPES or (not ext and ctype.startswith("video/")):
         _require(requested, {"video"}, filename)
         return FileKind("video", VIDEO_TYPES.get(ext, ctype))

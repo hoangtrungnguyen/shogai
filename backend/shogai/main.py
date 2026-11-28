@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
@@ -28,7 +28,18 @@ from .ingest import IngestError, IngestPipeline, IngestRequest, detect_kind, lin
 from .jobs import JobManager
 from .library import Library
 from .properties import migrate_properties
-from .store import NotFound, Store, StoreError, atomic_write, now_iso, safe_filename
+from .public import (
+    REQUEST_STATUSES,
+    REQUESTS_DIR,
+    PublicFolder,
+    PublicServer,
+    RequestQueue,
+    create_public_app,
+    draft_reply,
+    public_router,
+)
+from .relay import Relay, RelayError
+from .store import NotFound, Person, Store, StoreError, atomic_write, now_iso, safe_filename, slugify
 from .synthesis import Synthesizer
 
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
@@ -75,11 +86,48 @@ class ChatRequest(BaseModel):
     focus: list[str] = []
 
 
+class PublicFileWrite(BaseModel):
+    markdown: str = Field(max_length=1_000_000)
+
+
+class ReplyBody(BaseModel):
+    message: str = Field(min_length=1, max_length=20_000)
+    publish: bool = False  # also append the question and this reply to faq.md (public)
+
+
+class DeclineBody(BaseModel):
+    message: str = Field(default="", max_length=20_000)
+
+
+class DraftBody(BaseModel):
+    instructions: str = Field(default="", max_length=4000)
+
+
+class RelayConnect(BaseModel):
+    server: str = Field(min_length=1, max_length=500)
+    code: str = Field(default="", max_length=200)  # the relay's sign-up code, if it has one
+
+
+class RelayKeyCreate(BaseModel):
+    label: str = Field(default="", max_length=80)  # whom the key is for; stays in this app
+
+
+def circle_matches(people: list[Person]) -> dict[str, dict[str, Any]]:
+    """Name or alias (as a slug) -> the one person in the circle it belongs to; shared keys are left out."""
+    found: dict[str, dict[str, Any] | None] = {}
+    for p in people:
+        info = {"slug": p.slug, "name": p.name, "relationship": p.relationship, "avatar": p.avatar}
+        for key in {slugify(n) for n in [p.name, *p.aliases]} - {""}:
+            found[key] = None if key in found and found[key] != info else info
+    return {k: v for k, v in found.items() if v}
+
+
 def create_app(
     settings: Settings | None = None,
     gemini: GeminiService | None = None,
     analyzers: dict[str, Analyzer] | None = None,
     synthesizer: Synthesizer | None = None,
+    relay_transport: Any = None,  # tests: an httpx transport that reaches a relay app in-process
 ) -> FastAPI:
     settings = settings or load_settings()
     store = Store(settings.data_dir)
@@ -95,10 +143,28 @@ def create_app(
     advisor = Advisor(store, gem, settings)
     library = Library(store, gem, settings)
     tmp_root = settings.data_dir / ".tmp"
+    folder = PublicFolder(settings.public_root, store.trash_dir)
+    queue = RequestQueue(settings.data_dir / REQUESTS_DIR, store.trash_dir)
+    relay = Relay(settings.data_dir, queue, folder, settings.relay_poll, transport=relay_transport)
+
+    def relay_url() -> str | None:
+        return relay.state.share_url if relay.state.connected else None
+
+    # The public listener: your public notes, read-only, on a port of its own. Requests come through the relay.
+    public_server = None
+    if settings.public_port:
+        public_app = create_public_app(settings, folder=folder, relay_url=relay_url)
+        public_server = PublicServer(public_app, settings.public_host, settings.public_port, settings.public_url)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        if public_server:
+            await public_server.start()
+        relay.start()
         yield
+        await relay.stop()
+        if public_server:
+            await public_server.stop()
         # Stopping (a deploy, `docker compose stop`, Ctrl-C): let running jobs write their
         # results instead of cancelling them half-way.
         await jobs.drain(settings.shutdown_grace)
@@ -107,6 +173,8 @@ def create_app(
     app.state.settings = settings
     app.state.store = store
     app.state.jobs = jobs
+    app.state.public_server = public_server
+    app.state.relay = relay
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -125,6 +193,11 @@ def create_app(
     @app.exception_handler(IngestError)
     async def _ingest_error(_: Request, exc: IngestError):
         return JSONResponse({"detail": str(exc)}, status_code=400)
+
+    @app.exception_handler(RelayError)
+    async def _relay_error(_: Request, exc: RelayError):
+        # The relay refused (wrong sign-up code, unknown key…) -> 400; unreachable or failing -> 502.
+        return JSONResponse({"detail": str(exc)}, status_code=400 if exc.status and exc.status < 500 else 502)
 
     def require_gemini() -> None:
         if not gem.configured:
@@ -238,7 +311,8 @@ def create_app(
             fk = detect_kind(upload.filename or "", upload.content_type, spec.get("kind"))
             if fk.is_text and (upload.size or 0) > MAX_TEXT_FILE_BYTES:
                 raise HTTPException(400, f"{upload.filename} is larger than 8 MB; split it or upload a PDF instead.")
-            kinds.append((upload, fk, str(spec.get("note") or "").strip()))
+            recorded = fk.kind == "audio" and spec.get("recorded") is True
+            kinds.append((upload, fk, str(spec.get("note") or "").strip(), recorded))
         parsed_links = []
         for link in link_list:
             if isinstance(link, str):
@@ -266,7 +340,7 @@ def create_app(
                 atomic_write(dest, thoughts.strip() + "\n")
                 item.media, item.original = f"media/{dest.name}", "thoughts.md"
             items.append(item)
-        for upload, fk, note in kinds:
+        for upload, fk, note, recorded in kinds:
             name = upload.filename or "upload"
             if settings.keep_media:
                 dest = store.new_media_path(target.slug, name)
@@ -278,7 +352,7 @@ def create_app(
                 cleanup.append(dest)
             await run_in_threadpool(_copy_upload, upload, dest)
             item = Item(id=next_id(), kind=fk.kind, label=name, note=note, path=dest, mime_type=fk.mime_type,
-                        original=name, media=media_rel)
+                        original=name, media=media_rel, recorded=recorded)
             if fk.is_text:
                 item.text = dest.read_text(encoding="utf-8", errors="replace")
                 item.path = None
@@ -360,6 +434,120 @@ def create_app(
                 yield sse({"type": "error", "message": friendly_error(exc)})
 
         return StreamingResponse(stream(), media_type="text/event-stream", headers=SSE_HEADERS)
+
+    # ---------------------------------------------------- about me (public)
+    # The public routes also live here, so the public page can be tried on localhost (/ask.html).
+    app.include_router(public_router(folder, relay_url))
+
+    @app.get("/llms.txt", include_in_schema=False)
+    def llms_txt():
+        return PlainTextResponse(folder.llms_txt(relay_url()))
+
+    @app.get("/api/me")
+    def get_me():
+        public = public_server.status() if public_server else {
+            "enabled": False, "running": False, "local_url": None, "url": settings.public_url, "error": None,
+        }
+        return {
+            "owner": folder.owner(),
+            "folder": str(folder.root),
+            "files": [f.summary() for f in folder.files(include_drafts=True)],
+            "public": public,
+        }
+
+    @app.get("/api/me/files/{path:path}")
+    def get_public_file(path: str):
+        return folder.read(path, include_drafts=True).to_dict(raw=True)
+
+    @app.put("/api/me/files/{path:path}")
+    def put_public_file(path: str, body: PublicFileWrite):
+        return folder.write(path, body.markdown).to_dict(raw=True)
+
+    @app.delete("/api/me/files/{path:path}")
+    def delete_public_file(path: str):
+        trash = folder.delete(path)
+        return {"deleted": path, "moved_to": str(trash)}
+
+    # --------------------------------------------------------------- requests
+    @app.get("/api/requests")
+    def list_requests(status: str | None = None):
+        if status and status not in REQUEST_STATUSES:
+            raise HTTPException(400, f"status must be one of: {', '.join(REQUEST_STATUSES)}")
+        records = queue.list()
+        matches = circle_matches(store.list_people())
+        return {
+            "counts": queue.counts(records),
+            "requests": [
+                {**r.to_owner(), "key_label": relay.state.label(r.key_id), "match": matches.get(slugify(r.name))}
+                for r in records if not status or r.status == status
+            ],
+        }
+
+    @app.get("/api/requests/counts")
+    def count_requests():
+        """How many requests wait for a reply (the sidebar polls this)."""
+        return queue.counts(queue.list())
+
+    @app.post("/api/requests/{request_id}/reply")
+    async def reply_request(request_id: str, body: ReplyBody):
+        record = await run_in_threadpool(queue.reply, request_id, body.message)
+        published = None
+        if body.publish:
+            published = (await run_in_threadpool(folder.add_faq, record.question, record.reply)).path
+        relay_error = await relay.send_answer(record.id)  # the next sync retries when this fails
+        return {**queue.get(record.id).to_owner(), "published": published, "relay_error": relay_error}
+
+    @app.post("/api/requests/{request_id}/decline")
+    async def decline_request(request_id: str, body: DeclineBody | None = None):
+        record = await run_in_threadpool(queue.decline, request_id, body.message if body else "")
+        relay_error = await relay.send_answer(record.id)
+        return {**queue.get(record.id).to_owner(), "relay_error": relay_error}
+
+    @app.post("/api/requests/{request_id}/draft")
+    async def draft_request_reply(request_id: str, body: DraftBody | None = None):
+        require_gemini()
+        record = await run_in_threadpool(queue.get, request_id)
+        try:
+            text = await draft_reply(gem, settings, folder, record, body.instructions if body else "")
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(502, friendly_error(exc))
+        return {"draft": text}
+
+    @app.delete("/api/requests/{request_id}")
+    async def delete_request(request_id: str):
+        record = queue.get(request_id)
+        trash = await run_in_threadpool(queue.delete, request_id)
+        await relay.forget_request(record.relay_id)  # deleted on the relay too
+        return {"deleted": request_id, "moved_to": str(trash)}
+
+    # ------------------------------------------------------------------ relay
+    @app.get("/api/relay")
+    def get_relay():
+        return relay.state.view()
+
+    @app.post("/api/relay/connect")
+    async def connect_relay(body: RelayConnect):
+        return await relay.connect(body.server, body.code)
+
+    @app.post("/api/relay/disconnect")
+    async def disconnect_relay():
+        warning = await relay.disconnect()
+        return {**relay.state.view(), "warning": warning}
+
+    @app.post("/api/relay/keys", status_code=201)
+    async def create_relay_key(body: RelayKeyCreate):
+        key = await relay.create_key(body.label)
+        return {"key": {"id": key.id, "label": key.label, "key": key.key, "created": key.created},
+                "relay": relay.state.view()}
+
+    @app.delete("/api/relay/keys/{key_id}")
+    async def revoke_relay_key(key_id: str):
+        await relay.revoke_key(key_id)
+        return relay.state.view()
+
+    @app.post("/api/relay/sync")
+    async def sync_relay():
+        return await relay.sync()
 
     # -------------------------------------------------------- built frontend
     dist = settings.frontend_dist

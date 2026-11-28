@@ -67,9 +67,18 @@ class Settings:
     host: str
     port: int
     shutdown_grace: float  # seconds running jobs get to finish when the server stops
+    public_dir: Path | None  # your public notes; None means data_dir/public
+    public_host: str  # the public listener: your public notes, read-only
+    public_port: int  # 0 turns the public listener off
+    public_url: str | None  # the address visitors use (e.g. a tunnel), shown in the app
+    relay_poll: float  # seconds between syncs with your Shōgai Relay; 0 = only when you press Sync
 
     def with_overrides(self, **kwargs) -> "Settings":
         return replace(self, **kwargs)
+
+    @property
+    def public_root(self) -> Path:
+        return self.public_dir or self.data_dir / "public"
 
 
 def load_settings() -> Settings:
@@ -97,4 +106,9 @@ def load_settings() -> Settings:
         host=_env("SHOGAI_HOST", "127.0.0.1"),
         port=int(_env("SHOGAI_PORT", "8000")),
         shutdown_grace=float(_env("SHOGAI_SHUTDOWN_GRACE", "240")),
+        public_dir=_resolve_dir(public_dir) if (public_dir := _env("SHOGAI_PUBLIC_DIR", "")) else None,
+        public_host=_env("SHOGAI_PUBLIC_HOST", "127.0.0.1"),
+        public_port=int(_env("SHOGAI_PUBLIC_PORT", "8001")),
+        public_url=_env("SHOGAI_PUBLIC_URL", "").rstrip("/") or None,
+        relay_poll=float(_env("SHOGAI_RELAY_POLL", "60")),
     )

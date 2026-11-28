@@ -6,7 +6,7 @@ from google.genai import types
 
 from ..config import Settings
 from ..gemini import GeminiError, GeminiService
-from ..prompts import ANALYZER_SYSTEM, MEDIA_TASK
+from ..prompts import ANALYZER_SYSTEM, MEDIA_TASK, VOICE_MEMO_ORIGIN
 from ..schemas import MediaAnalysis
 from .base import AnalysisResult, Item, StatusFn, SubjectContext, render_source_markdown
 
@@ -14,7 +14,7 @@ from .base import AnalysisResult, Item, StatusFn, SubjectContext, render_source_
 async def analyze_media(
     gem: GeminiService, settings: Settings, ctx: SubjectContext, item: Item, status: StatusFn
 ) -> AnalysisResult:
-    media_kind = "audio recording" if item.kind == "audio" else "video"
+    media_kind = "voice memo" if item.recorded else "audio recording" if item.kind == "audio" else "video"
     uploaded = None
     if item.url:
         part = types.Part(file_data=types.FileData(file_uri=item.url))
@@ -25,7 +25,8 @@ async def analyze_media(
     try:
         await status("Listening…" if item.kind == "audio" else "Watching the video…")
         prompt = ctx.render() + "\n" + MEDIA_TASK.format(
-            media_kind=media_kind, label=item.label, note=item.note or "(none)"
+            media_kind=media_kind, label=item.label, note=item.note or "(none)",
+            origin=VOICE_MEMO_ORIGIN if item.recorded else "",
         )
         analysis, _ = await gem.generate_structured(
             model=settings.model_analyze,
