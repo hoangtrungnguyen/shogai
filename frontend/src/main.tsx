@@ -6,8 +6,10 @@ import { AdvisorPage } from "./pages/AdvisorPage";
 import { CirclePage } from "./pages/CirclePage";
 import { ConsumePage } from "./pages/ConsumePage";
 import { LibraryPage } from "./pages/LibraryPage";
+import { MePage } from "./pages/MePage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { PersonPage } from "./pages/PersonPage";
+import { RequestsPage } from "./pages/RequestsPage";
 import { AppProvider } from "./state";
 import "./styles.css";
 
@@ -36,6 +38,8 @@ function App() {
             <Route path="/consume" element={<ConsumePage />} />
             <Route path="/advisor" element={<AdvisorPage />} />
             <Route path="/resources" element={<LibraryPage />} />
+            <Route path="/me" element={<MePage />} />
+            <Route path="/requests" element={<RequestsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='38' fill='none' stroke='%23c4452f' stroke-width='10' stroke-linecap='round' stroke-dasharray='200 40'/></svg>" />
+    <link rel="alternate" type="text/markdown" href="/llms.txt" title="How AI agents use this relay" />
+    <link rel="stylesheet" href="/static/relay.css" />
+    <script src="/static/relay.js" defer></script>
+    <title>Shōgai Relay</title>
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="head">
+        <div class="enso" aria-hidden="true"></div>
+        <div>
+          <h1>Shōgai Relay</h1>
+          <p class="sub">Ask someone a question with the key they gave you. They answer it themselves.</p>
+        </div>
+      </header>
+
+      <section id="key-card" class="card">
+        <form id="key-form" autocomplete="off">
+          <label class="field" for="key-input"><span>Key</span></label>
+          <div class="row">
+            <input id="key-input" type="password" placeholder="shk_…" spellcheck="false" autocapitalize="off" required />
+            <button type="button" id="key-show" class="btn ghost">Show</button>
+          </div>
+          <p class="hint">Only people who have one of someone’s keys can ask them anything here.</p>
+          <p class="error" id="key-error" role="alert" hidden></p>
+          <button type="submit" class="btn primary" id="key-open">Open</button>
+        </form>
+      </section>
+
+      <section id="asking" hidden>
+        <div class="card to-card">
+          <div class="grow">
+            <p class="hint">You’re asking</p>
+            <h2 id="to-name"></h2>
+            <p id="to-headline" class="sub" hidden></p>
+          </div>
+          <button type="button" id="key-forget" class="btn ghost small">Use another key</button>
+        </div>
+
+        <form id="ask-form" class="card">
+          <h3>Ask <span data-to></span></h3>
+          <p class="hint">
+            Only <span data-to></span> and you see your question and the answer. Nothing is answered
+            automatically: <span data-to></span> replies in person, and the answer shows up below.
+          </p>
+          <label class="field" for="ask-name"><span>Your name <em>(optional)</em></span></label>
+          <input id="ask-name" maxlength="120" autocomplete="name" />
+          <label class="field" for="ask-question"><span>Your question</span></label>
+          <textarea id="ask-question" rows="5" maxlength="4000" required></textarea>
+          <p class="error" id="ask-error" role="alert" hidden></p>
+          <p class="ok" id="ask-ok" role="status" hidden></p>
+          <button type="submit" class="btn primary" id="ask-send">Send</button>
+        </form>
+
+        <section class="card" id="mine">
+          <div class="mine-head">
+            <h3>Your questions</h3>
+            <button type="button" id="refresh" class="btn ghost small">Refresh</button>
+          </div>
+          <p id="mine-empty" class="hint">Nothing asked with this key on this device yet.</p>
+          <ol id="mine-list"></ol>
+          <p class="hint">
+            Kept in this browser. To read an answer on another device, copy the question’s private link
+            (you will need the key there too).
+          </p>
+        </section>
+      </section>
+
+      <footer class="foot">For AI agents: <a href="/llms.txt">/llms.txt</a> · <a href="/docs">API</a></footer>
+    </main>
+
+    <template id="ticket-tpl">
+      <li class="ticket">
+        <div class="t-head">
+          <span class="t-status pill"></span>
+          <span class="t-meta grow"></span>
+          <button type="button" class="t-link btn ghost tiny" title="Copy this question's private link">Copy link</button>
+          <button type="button" class="t-forget btn ghost tiny" title="Remove from this browser">Remove</button>
+        </div>
+        <p class="t-question"></p>
+        <p class="t-reply" hidden></p>
+      </li>
+    </template>
+  </body>
+</html>

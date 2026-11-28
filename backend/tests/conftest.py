@@ -1,8 +1,10 @@
 import os
 import tempfile
 
-# Keep the module-level app (shogai.main.app) away from the real data folder.
+# Keep the module-level app (shogai.main.app) away from the real data folder and the public port.
 os.environ["SHOGAI_DATA_DIR"] = tempfile.mkdtemp(prefix="shogai-test-")
+os.environ["SHOGAI_PUBLIC_DIR"] = ""
+os.environ["SHOGAI_PUBLIC_PORT"] = "0"
 
 import pytest  # noqa: E402
 
@@ -16,6 +18,9 @@ def settings(tmp_path):
         data_dir=tmp_path / "data",
         gemini_api_key="test-key",
         frontend_dist=tmp_path / "no-dist",
+        public_dir=None,  # -> data_dir/public
+        public_port=0,
+        relay_poll=0,  # tests sync by hand
     )
 
 

@@ -19,3 +19,6 @@ backend/tests/
 .idea/
 .vscode/
 **/.DS_Store
+
+# The relay has its own image (relay/Dockerfile)
+relay/

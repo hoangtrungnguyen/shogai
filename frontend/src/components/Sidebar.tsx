@@ -1,5 +1,5 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { useJobs, usePeople, type TrackedJob } from "../state";
+import { useInbox, useJobs, usePeople, type TrackedJob } from "../state";
 import type { Health } from "../types";
 import { Icon } from "./Icon";
 
@@ -48,6 +48,7 @@ function JobRow({ job, onDismiss }: { job: TrackedJob; onDismiss: () => void }) 
 export function Sidebar() {
   const { people, health } = usePeople();
   const { jobs, dismiss } = useJobs();
+  const { pending } = useInbox();
 
   return (
     <aside className="sidebar">
@@ -73,6 +74,17 @@ export function Sidebar() {
         </NavLink>
         <NavLink to="/resources">
           <Icon name="academic" /> Resources
+        </NavLink>
+        <NavLink to="/me" title="The notes about you that anyone can read">
+          <Icon name="user" /> About me
+        </NavLink>
+        <NavLink to="/requests" title="What people asked you on your public page">
+          <Icon name="inbox" /> Requests
+          {pending > 0 && (
+            <span className="nav-badge" aria-label={`${pending} waiting for your reply`}>
+              {pending}
+            </span>
+          )}
         </NavLink>
       </nav>
 

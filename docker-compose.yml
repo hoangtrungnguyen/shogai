@@ -1,4 +1,4 @@
-# Shōgai in Docker: UI + API on http://127.0.0.1:8000
+# Shōgai in Docker: UI + API on http://127.0.0.1:8000, the public page on http://127.0.0.1:8001
 #
 #   ./scripts/docker.sh                  deploy: build shogai:<VERSION>, stop the running version
 #                                        (running jobs finish first), back up the data, start the new one
@@ -27,9 +27,15 @@ services:
       # Paths inside the container; these win over the same keys in backend/.env.
       SHOGAI_DATA_DIR: /app/data
       SHOGAI_FRONTEND_DIST: /app/frontend/dist
+      # The public page listens on all interfaces inside the container; `ports` below decides who reaches it.
+      SHOGAI_PUBLIC_HOST: 0.0.0.0
+      SHOGAI_PUBLIC_PORT: "8001"
     ports:
       # Localhost only: the app has no login and holds personal data.
       - "127.0.0.1:${SHOGAI_PORT:-8000}:8000"
+      # The public page: your public notes, read-only, nothing else. The only port to expose
+      # (through a tunnel or reverse proxy) — never 8000.
+      - "127.0.0.1:${SHOGAI_PUBLIC_PORT:-8001}:8001"
     volumes:
       # The Markdown database lives on the host, so every version starts with the same data.
       # SHOGAI_DATA_PATH moves it (e.g. outside this repo). The folder is never created

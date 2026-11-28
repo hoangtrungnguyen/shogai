@@ -49,15 +49,36 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** "1:05", or "1:02:05" past an hour. */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
 const IMAGE_EXT = /\.(jpe?g|png|webp|heic|heif)$/i;
 const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mpe?g|avi|wmv|flv|3gp)$/i;
-const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|aiff?)$/i;
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|aiff?|weba)$/i;
+/** WebM holds video or sound only; browsers record voice memos as .webm. */
+const WEBM_EXT = /\.webm$/i;
 const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|log|html?|xml|ya?ml|srt|vtt|rtf)$/i;
 
-/** Mirror of the backend's detect_kind: default kind + the kinds the user may switch to. */
-export function fileKinds(file: File): { kind: SourceKind; options: SourceKind[] } | null {
+/** What the "Upload a recording" button lets you pick. */
+export const AUDIO_ACCEPT = "audio/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac,.aif,.aiff,.weba,.webm";
+
+/**
+ * Mirror of the backend's detect_kind: default kind + the kinds the user may switch to.
+ * `audio` is set for files picked as recordings: a .webm then starts as audio instead of video.
+ */
+export function fileKinds(file: File, audio = false): { kind: SourceKind; options: SourceKind[] } | null {
   const name = file.name;
   if (IMAGE_EXT.test(name)) return { kind: "image", options: ["image"] };
+  if (WEBM_EXT.test(name))
+    return audio || file.type.startsWith("audio/")
+      ? { kind: "audio", options: ["audio", "video"] }
+      : { kind: "video", options: ["video", "audio"] };
   if (VIDEO_EXT.test(name)) return { kind: "video", options: ["video"] };
   if (AUDIO_EXT.test(name)) return { kind: "audio", options: ["audio"] };
   if (/\.pdf$/i.test(name)) return { kind: "academic", options: ["academic", "text"] };

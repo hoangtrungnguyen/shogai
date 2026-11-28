@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ingest } from "../api";
 import { Icon } from "../components/Icon";
+import { VoiceRecorder, type Recording } from "../components/VoiceRecorder";
 import { useJobs, usePeople, type TrackedJob } from "../state";
 import type { SourceKind } from "../types";
-import { fileKinds, formatBytes, KIND_META, linkKinds, uid } from "../util";
+import { fileKinds, formatBytes, formatDuration, KIND_META, linkKinds, uid } from "../util";
 
 interface FileEntry {
   key: string;
@@ -12,7 +13,17 @@ interface FileEntry {
   kind: SourceKind;
   options: SourceKind[];
   note: string;
+  /** Object URLs: an image thumbnail, or the source of an audio player. */
   preview?: string;
+  audio?: string;
+  /** A voice memo recorded on this page, and its length. */
+  recorded?: boolean;
+  seconds?: number;
+}
+
+function revokeUrls(f: FileEntry) {
+  if (f.preview) URL.revokeObjectURL(f.preview);
+  if (f.audio) URL.revokeObjectURL(f.audio);
 }
 
 interface LinkEntry {
@@ -28,7 +39,8 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const PIPELINE: { kind: SourceKind; title: string; text: string }[] = [
   { kind: "image", title: "Images", text: "Gemini vision reads photos, screenshots and cards — scene, mood, visible text." },
   { kind: "text", title: "Personal thoughts", text: "Gemini extracts every fact, preference and feeling from your notes or chat exports." },
-  { kind: "video", title: "Video & audio", text: "Gemini watches or listens end-to-end: key moments, quotes, tone." },
+  { kind: "audio", title: "Voice memos", text: "Record one here or upload a recording: Gemini listens end-to-end and notes every fact and feeling." },
+  { kind: "video", title: "Video", text: "Gemini watches end-to-end: key moments, quotes, tone." },
   { kind: "academic", title: "Academic papers", text: "Gemini reads the paper, then fact-checks its claims with Google Search." },
 ];
 
@@ -114,6 +126,7 @@ export function ConsumePage() {
   const [linkInput, setLinkInput] = useState("");
   const [rejected, setRejected] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -134,14 +147,15 @@ export function ConsumePage() {
     if (jobId && !job) api.job(jobId).then(track).catch(() => undefined);
   }, [jobId, job, track]);
 
-  useEffect(() => () => filesRef.current.forEach((f) => f.preview && URL.revokeObjectURL(f.preview)), []);
+  useEffect(() => () => filesRef.current.forEach(revokeUrls), []);
 
-  function addFiles(list: FileList | File[] | null) {
+  /** `asAudio`: picked as recordings, so a .webm starts as audio rather than video. */
+  function addFiles(list: FileList | File[] | null, asAudio = false) {
     if (!list) return;
     const bad: string[] = [];
     const add: FileEntry[] = [];
     for (const file of Array.from(list)) {
-      const kinds = fileKinds(file);
+      const kinds = fileKinds(file, asAudio);
       if (!kinds) {
         bad.push(file.name);
         continue;
@@ -152,16 +166,31 @@ export function ConsumePage() {
         ...kinds,
         note: "",
         preview: kinds.kind === "image" && !/\.hei[cf]$/i.test(file.name) ? URL.createObjectURL(file) : undefined,
+        audio: kinds.kind === "audio" ? URL.createObjectURL(file) : undefined,
       });
     }
     setRejected(bad);
     setFiles((cur) => [...cur, ...add]);
   }
 
+  function addRecording({ file, seconds }: Recording) {
+    const entry: FileEntry = {
+      key: uid(),
+      file,
+      kind: "audio",
+      options: ["audio"],
+      note: "",
+      audio: URL.createObjectURL(file),
+      recorded: true,
+      seconds,
+    };
+    setFiles((cur) => [...cur, entry]);
+  }
+
   function removeFile(key: string) {
     setFiles((cur) => {
       const f = cur.find((x) => x.key === key);
-      if (f?.preview) URL.revokeObjectURL(f.preview);
+      if (f) revokeUrls(f);
       return cur.filter((x) => x.key !== key);
     });
   }
@@ -220,12 +249,12 @@ export function ConsumePage() {
       const snapshot = await ingest(
         slug,
         thoughts,
-        files.map((f) => ({ file: f.file, kind: f.kind, note: f.note })),
+        files.map((f) => ({ file: f.file, kind: f.kind, note: f.note, recorded: f.recorded })),
         allLinks.map((l) => ({ url: l.url, kind: l.kind, note: l.note })),
       );
       track(snapshot);
       setParams({ person: slug, job: snapshot.id });
-      files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
+      files.forEach(revokeUrls);
       setFiles([]);
       setLinks([]);
       setLinkInput("");
@@ -307,6 +336,19 @@ export function ConsumePage() {
               />
             </label>
 
+            <div className="field">
+              <span>
+                <Icon name="audio" size={15} /> Voice memo
+                <span className="field-hint">Rather say it? Record your thoughts, or add a voice message or call recording.</span>
+              </span>
+              <VoiceRecorder
+                onRecorded={addRecording}
+                onUpload={(list) => addFiles(list, true)}
+                onActive={setRecording}
+                disabled={busy}
+              />
+            </div>
+
             <div
               className={`dropzone ${dragOver ? "over" : ""}`}
               onDragOver={(e) => {
@@ -351,8 +393,12 @@ export function ConsumePage() {
                     <div className="grow min0">
                       <div className="row gap-s">
                         <span className="truncate strong">{f.file.name}</span>
-                        <span className="muted small nowrap">{formatBytes(f.file.size)}</span>
+                        <span className="muted small nowrap">
+                          {f.seconds !== undefined && `${formatDuration(f.seconds)} · `}
+                          {formatBytes(f.file.size)}
+                        </span>
                       </div>
+                      {f.audio && f.kind === "audio" && <audio className="file-audio" src={f.audio} controls preload="metadata" />}
                       <input
                         className="note-input"
                         placeholder="Context for Gemini (optional): who, when, where…"
@@ -445,9 +491,16 @@ export function ConsumePage() {
           {error && <div className="banner error">{error}</div>}
           <div className="submit-row">
             <span className="muted small">
-              {files.length + links.length + (thoughts.trim() ? 1 : 0) + (typedLink ? 1 : 0)} source(s) ready
+              {recording
+                ? "Stop the recording to add it"
+                : `${files.length + links.length + (thoughts.trim() ? 1 : 0) + (typedLink ? 1 : 0)} source(s) ready`}
             </span>
-            <button type="button" className="btn primary big" disabled={!hasPerson || !hasInput || busy} onClick={submit}>
+            <button
+              type="button"
+              className="btn primary big"
+              disabled={!hasPerson || !hasInput || busy || recording}
+              onClick={submit}
+            >
               <Icon name="sparkle" size={18} /> {busy ? "Uploading…" : "Consume with Gemini"}
             </button>
           </div>

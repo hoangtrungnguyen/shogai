@@ -23,6 +23,7 @@ const PATHS: Record<string, string> = {
     '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/>',
   send: '<path d="M4 12 20 4l-6 16-3-7z"/><path d="m11 13 9-9"/>',
   stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="2"/>',
+  pause: '<path d="M9 6v12M15 6v12"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7"/>',
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/>',
@@ -41,6 +42,10 @@ const PATHS: Record<string, string> = {
   instagram: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.3 6.7v.01"/>',
   github: '<path d="M9 19.5c-4.3 1.4-4.3-2-6-2.5m12 4.5v-3.4a3 3 0 0 0-.8-2.3c2.8-.3 5.8-1.4 5.8-6.2a4.8 4.8 0 0 0-1.3-3.3 4.5 4.5 0 0 0-.1-3.3s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6.2 0C6.6 1.7 5.6 2 5.6 2a4.5 4.5 0 0 0-.1 3.3 4.8 4.8 0 0 0-1.3 3.3c0 4.8 3 5.9 5.8 6.2a3 3 0 0 0-.8 2.3v3.4"/>',
   file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21c0-4.2 3.4-7 7.5-7s7.5 2.8 7.5 7"/>',
+  inbox: '<path d="M3 13.5h5l1.5 2.5h5l1.5-2.5h5"/><path d="M5.6 5h12.8l2.6 8.5V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5.5z"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+  open: '<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
 };
 
 export type IconName = keyof typeof PATHS;

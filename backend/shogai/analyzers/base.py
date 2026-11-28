@@ -58,6 +58,7 @@ class Item:
     url: str | None = None
     original: str | None = None  # original filename
     media: str | None = None  # stored copy, relative to the person folder (e.g. "media/x.jpg")
+    recorded: bool = False  # a voice memo the user recorded in the app (the voice is most likely theirs)
 
 
 @dataclass

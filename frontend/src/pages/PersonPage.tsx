@@ -84,7 +84,12 @@ function SourceItem({
   );
 }
 
-function MediaGrid({ slug, media }: { slug: string; media: MediaFile[] }) {
+function MediaGrid({ slug, media, sources }: { slug: string; media: MediaFile[]; sources: SourceRecord[] }) {
+  // A .webm may hold sound only (recorded voice memos): its source says whether it was read as audio.
+  const audioFiles = useMemo(
+    () => new Set(sources.filter((s) => s.kind === "audio" && s.media).map((s) => s.media)),
+    [sources],
+  );
   if (!media.length) return <p className="muted center pad">No original files stored for this person.</p>;
   return (
     <div className="media-grid">
@@ -93,8 +98,9 @@ function MediaGrid({ slug, media }: { slug: string; media: MediaFile[] }) {
         const lower = m.name.toLowerCase();
         let preview;
         if (/\.(jpe?g|png|webp|gif)$/.test(lower)) preview = <img src={url} alt={m.name} loading="lazy" />;
-        else if (/\.(mp4|m4v|mov|webm)$/.test(lower)) preview = <video src={url} controls preload="metadata" />;
-        else if (/\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|aiff?)$/.test(lower))
+        else if (/\.(mp4|m4v|mov|webm)$/.test(lower) && !audioFiles.has(m.path))
+          preview = <video src={url} controls preload="metadata" />;
+        else if (/\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|aiff?|weba|webm)$/.test(lower))
           preview = (
             <div className="media-audio">
               <Icon name="audio" size={28} />
@@ -344,7 +350,7 @@ export function PersonPage() {
         </div>
       )}
 
-      {tab === "media" && <MediaGrid slug={slug} media={media} />}
+      {tab === "media" && <MediaGrid slug={slug} media={media} sources={sources} />}
 
       {tab === "markdown" && (
         <RawEditor

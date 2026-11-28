@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# Shōgai in one image: Node builds the React UI, then FastAPI (uvicorn) serves UI + API on :8000.
+# Shōgai in one image: Node builds the React UI, then FastAPI (uvicorn) serves UI + API on :8000
+# and the public page (your public notes, read-only) on :8001.
 # Build it with ./scripts/docker.sh (stamps version, commit and build time) — see README.md.
 
 ARG NODE_VERSION=24
@@ -48,7 +49,7 @@ ENV PATH="/app/backend/.venv/bin:$PATH" \
     SHOGAI_DATA_DIR=/app/data \
     SHOGAI_FRONTEND_DIST=/app/frontend/dist
 USER shogai
-EXPOSE 8000
+EXPOSE 8000 8001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"]
 

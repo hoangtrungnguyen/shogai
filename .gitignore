@@ -20,3 +20,8 @@ frontend/dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Shōgai Relay
+relay/data/
+relay/.venv/
+relay/.env
